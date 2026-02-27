@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+gensim
+joblib
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+psycopg2-binary
+python-dotenv
+
+#pip install -r requirements.txt
