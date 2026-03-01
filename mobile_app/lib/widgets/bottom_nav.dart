@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
 class BottomNav extends StatefulWidget {
-  const BottomNav({super.key});
+  final int currentIndex;
+  final Function(int) onTap;
+  const BottomNav({super.key, required this.currentIndex, required this.onTap});
 
   @override
   State<BottomNav> createState() => _BottomNavState();
 }
 
 class _BottomNavState extends State<BottomNav> {
-  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -23,16 +24,12 @@ class _BottomNavState extends State<BottomNav> {
       ),
       child: BottomNavigationBar(
         type: BottomNavigationBarType.fixed, // เพื่อให้แสดง label ทุกตัว
-        currentIndex: _currentIndex,         // บอกว่าตอนนี้เลือกอันไหนอยู่
-        selectedItemColor: const Color(0xFF28B446), // สีเขียวตามรูป
+        currentIndex: widget.currentIndex, // บอกว่าตอนนี้เลือกหน้าไหนอยู่
+        selectedItemColor: const Color(0xFF28B446),
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
         
-        onTap: (index) { // ฟังก์ชันเมื่อมีการกดเปลี่ยนเมนู
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onTap: widget.onTap,
       
         items: const [
           BottomNavigationBarItem(

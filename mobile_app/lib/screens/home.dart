@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/widgets/bottom_nav.dart';
-import 'package:mobile_app/widgets/ingredientList.dart';
-import 'package:mobile_app/screens/menuResults.dart';
-
+import 'package:mobile_app/screens/homeSubNavigator.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -39,42 +37,23 @@ class _HomeState extends State<Home> {
   ];
 
   final PageController _pageController = PageController();
-  int _currentPage = 0;
-  void _goToResults() {
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
+  int _selectedIndexPage = 0; // เก็บ index ของ Tab ปัจจุบัน
 
-  void _goBack() {
-    _pageController.previousPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndexPage = index;
+    });
+    _pageController.jumpToPage(index); // สั่งให้ PageView กระโดดไปหน้านั้นๆ
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: _currentPage == 0, // ถ้าอยู่หน้าแรกให้กดออกแอปได้ตามปกติ
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return; // ถ้าออกไปแล้วไม่ต้องทำอะไร
-
-
-        if (_currentPage > 0) { // ถ้าหน้าปัจจุบันไม่ใช่หน้าแรก
-          _goBack(); // สั่งให้ย้อนกลับไปหน้าวัตถุดิบ
-        }
-      },
-      child: Scaffold(
+    return Scaffold(
         body: PageView(
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
-          onPageChanged: (index) => setState(() => _currentPage = index),
           children: [
-            // รายการวัตถุดิบ
-            IngredientList(
-              onFindMenu: _goToResults,
+            HomeSubNavigator(
               foodItems: _foodItems,
               onToggleSelection: (index) {
                 setState(() {
@@ -83,14 +62,14 @@ class _HomeState extends State<Home> {
                 });
               },
             ),
-
-            // หน้าที่ 2: ผลลัพธ์เมนู (สร้าง Widget ใหม่)
-            MenuResultsScreen(onBack: _goBack),
+            
           ],
         ),
 
-        bottomNavigationBar: const BottomNav(),
-      ),
-    );
+        bottomNavigationBar: BottomNav(
+          currentIndex: _selectedIndexPage,
+          onTap: _onItemTapped,
+        ),
+      );
   }
 }
