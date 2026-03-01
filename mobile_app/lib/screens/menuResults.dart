@@ -39,7 +39,7 @@ class MenuResultsScreen extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        "I found 4 menu items...",
+                        "I found 4 menu items",
                         style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                     ],
@@ -63,7 +63,7 @@ class MenuResultsScreen extends StatelessWidget {
                     kcal: "test",
                     time: "12:00",
                     matchPercent: "100%",
-                    imageColor: Colors.grey,
+                    imageColor: Colors.grey.shade300,
                   ),
                 ],
               ),
