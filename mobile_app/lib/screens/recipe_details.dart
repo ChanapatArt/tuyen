@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/screens/community_reviews.dart';
 
 class RecipeDetails extends StatelessWidget {
   final String title;
@@ -153,7 +154,15 @@ class RecipeDetails extends StatelessWidget {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CommunityReviews(),
+                      ),
+                    );
+                    
+                  },
                   icon: const Icon(Icons.chat_bubble, color: Color(0xFF28B446)),
                   label: const Text("Read reviews"),
                   style: ElevatedButton.styleFrom(

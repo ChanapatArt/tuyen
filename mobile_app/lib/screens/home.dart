@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/screens/community_reviews.dart';
 import 'package:mobile_app/screens/menu_results.dart';
 import 'package:mobile_app/screens/recipe_details.dart';
 import 'package:mobile_app/screens/search.dart';
@@ -67,7 +68,8 @@ class _HomeState extends State<Home> {
             ),
             Search(),
             RecipeDetails(title: 'Minced pork omelet'),
-            MenuResultsScreen(onBack: (){})
+            MenuResultsScreen(onBack: (){}),
+            CommunityReviews()
           ],
         ),
 
