@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_app/screens/menuResults.dart';
-import 'package:mobile_app/screens/recipeDetails.dart';
+import 'package:mobile_app/screens/menu_results.dart';
+import 'package:mobile_app/screens/recipe_details.dart';
 import 'package:mobile_app/screens/search.dart';
 import 'package:mobile_app/widgets/bottom_nav.dart';
-import 'package:mobile_app/screens/homeSubNavigator.dart';
+import 'package:mobile_app/screens/home_sub_navigator.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_app/screens/recipeDetails.dart';
+import 'package:mobile_app/screens/recipe_details.dart';
 
 class Search extends StatelessWidget {
   const Search({super.key});

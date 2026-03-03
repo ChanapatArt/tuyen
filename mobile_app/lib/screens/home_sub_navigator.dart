@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_app/widgets/ingredientList.dart';
-import 'package:mobile_app/screens/menuResults.dart';
+import 'package:mobile_app/widgets/ingredient_list.dart';
+import 'package:mobile_app/screens/menu_results.dart';
 
 class HomeSubNavigator extends StatefulWidget {
   final List<Map<String, dynamic>> foodItems;
