@@ -17,18 +17,18 @@ class HomeSubNavigator extends StatefulWidget {
 
 class _HomeSubNavigatorState extends State<HomeSubNavigator> {
   final PageController _subPageController = PageController();
-    int _currentPage = 0; // เก็บ index ของ หน้ารายการ กับผลลัพธ์
+  int _currentPage = 0; // เก็บ index ของ หน้ารายการ กับผลลัพธ์
   void _goToResults() {
     _subPageController.nextPage(
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      curve: Curves.fastOutSlowIn,
     );
   }
 
-    void _goBack() {
+  void _goBack() {
     _subPageController.previousPage(
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      curve: Curves.fastOutSlowIn,
     );
   }
 
@@ -39,7 +39,8 @@ class _HomeSubNavigatorState extends State<HomeSubNavigator> {
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return; // ถ้าออกไปแล้วไม่ต้องทำอะไร
 
-        if (_currentPage > 0) { // ถ้าหน้าปัจจุบันไม่ใช่หน้าแรก
+        if (_currentPage > 0) {
+          // ถ้าหน้าปัจจุบันไม่ใช่หน้าแรก
           _goBack();
         }
       },

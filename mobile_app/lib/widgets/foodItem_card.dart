@@ -28,7 +28,7 @@ class FoodItemCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation:  3,
-        color: isSelected ? Colors.green.shade50 : Theme.of(context).scaffoldBackgroundColor, // สีพื้นหลัง
+        color: isSelected ? Colors.green.shade50 : Colors.white, // สีพื้นหลัง
         shadowColor: const Color.fromARGB(110, 0, 0, 0),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),

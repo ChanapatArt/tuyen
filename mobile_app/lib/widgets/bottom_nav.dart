@@ -20,7 +20,7 @@ class _BottomNavState extends State<BottomNav> {
             color: Colors.grey.withValues(alpha: 0.3),
             width: 1
           )
-        )
+        ),
       ),
       child: BottomNavigationBar(
         type: BottomNavigationBarType.fixed, // เพื่อให้แสดง label ทุกตัว

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/screens/recipeDetails.dart';
 
 class Search extends StatelessWidget {
   const Search({super.key});
@@ -6,7 +7,7 @@ class Search extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFEF7FF), // สีพื้นหลังตามธีมแอป
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
@@ -82,6 +83,7 @@ class Search extends StatelessWidget {
                 itemCount: 6, // จำนวนรายการสมมติ
                 itemBuilder: (context, index) {
                   return _buildPopularCard(
+                    context,
                     index == 0 ? "Minced pork omelet" : "Chicken Salad",
                     index == 0 ? "350 kcal" : "250 kcal",
                     index == 0 ? Colors.green : Colors.grey.shade300,
@@ -112,38 +114,48 @@ class Search extends StatelessWidget {
   }
 
   // ฟังก์ชันสร้างการ์ดเมนูยอดนิยม
-  Widget _buildPopularCard(String title, String kcal, Color color) {
-    return Card(
-      // elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ส่วนรูปภาพสมมติ
-          Expanded(
-            child: Container(color: color),
-          ),
-          // ส่วนรายละเอียด
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  kcal,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                ),
-              ],
+  Widget _buildPopularCard(BuildContext context, String title, String kcal, Color color) {
+    return GestureDetector(
+      onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RecipeDetails(title: title),
+        ),
+      );
+    },
+      child: Card(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ส่วนรูปภาพสมมติ
+            Expanded(
+              child: Container(color: color),
             ),
-          ),
-        ],
+            // ส่วนรายละเอียด
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    kcal,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
