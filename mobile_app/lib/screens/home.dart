@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/screens/community_reviews.dart';
+import 'package:mobile_app/screens/food_plan.dart';
 import 'package:mobile_app/screens/menu_results.dart';
 import 'package:mobile_app/screens/recipe_details.dart';
 import 'package:mobile_app/screens/search.dart';
+import 'package:mobile_app/screens/shopping_list.dart';
 import 'package:mobile_app/widgets/bottom_nav.dart';
 import 'package:mobile_app/screens/home_sub_navigator.dart';
 
@@ -67,9 +69,8 @@ class _HomeState extends State<Home> {
               },
             ),
             Search(),
-            RecipeDetails(title: 'Minced pork omelet'),
-            MenuResultsScreen(onBack: (){}),
-            CommunityReviews()
+            FoodPlanPage(),
+            ShoppingList(),
           ],
         ),
 
