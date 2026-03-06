@@ -11,6 +11,9 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .database import get_db, engine # นำเข้าไฟล์ database.py ที่เราเพิ่งสร้าง
+from pydantic import BaseModel
+from passlib.context import CryptContext
+from sqlalchemy import text
 
 #uvicorn app.main:app --reload
 #http://127.0.0.1:8000/docs
@@ -130,3 +133,96 @@ def recommend_recipes(request: FridgeRequest):
         })
         
     return {"recommendations": results}
+
+# เครื่องมือเข้ารหัสผ่าน
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 1. ปรับแก้ Schema สำหรับหน้า Sign Up (รับ Full Name เพิ่ม)
+class UserRegisterSchema(BaseModel):
+    full_name: str
+    username: str
+    password: str
+
+# 2. Schema สำหรับหน้า Sign In (รับแค่ User กับ Password เหมือนเดิม)
+class UserLoginSchema(BaseModel):
+    username: str
+    password: str
+
+# 3. อัปเดตตาราง Database (เพิ่มคอลัมน์ full_name)
+@app.on_event("startup")
+def create_users_table():
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                full_name VARCHAR(100) NOT NULL,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL
+            )
+        """))
+        conn.commit()
+
+# ==========================================
+# 🔐 4. API สมัครสมาชิก (Register / Sign Up)
+# ==========================================
+@app.post("/register")
+def register(user: UserRegisterSchema):
+    with engine.connect() as conn:
+        # เช็คว่ามีชื่อผู้ใช้นี้ในระบบหรือยัง
+        result = conn.execute(text("SELECT username FROM users WHERE username = :u"), {"u": user.username}).fetchone()
+        if result:
+            return {"status": "error", "message": "มีชื่อผู้ใช้นี้ในระบบแล้ว"}
+        
+        # เข้ารหัสผ่าน และบันทึกลงฐานข้อมูล
+        hashed_pw = pwd_context.hash(user.password)
+        conn.execute(
+            text("INSERT INTO users (full_name, username, password_hash) VALUES (:f, :u, :p)"), 
+            {"f": user.full_name, "u": user.username, "p": hashed_pw}
+        )
+        conn.commit()
+        return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
+
+# ==========================================
+# 🔑 5. API เข้าสู่ระบบ (Login / Sign In)
+# ==========================================
+@app.post("/login")
+def login(user: UserLoginSchema):
+    with engine.connect() as conn:
+        # ดึงรหัสผ่าน และ ชื่อเต็ม (full_name) จากฐานข้อมูล
+        result = conn.execute(text("SELECT password_hash, full_name FROM users WHERE username = :u"), {"u": user.username}).fetchone()
+        
+        if not result:
+            return {"status": "error", "message": "ไม่พบชื่อผู้ใช้นี้ในระบบ"}
+        
+        # ถ้ารหัสผ่านถูกต้อง
+        if pwd_context.verify(user.password, result[0]):
+            return {
+                "status": "success", 
+                "message": "เข้าสู่ระบบสำเร็จ!", 
+                "username": user.username,
+                "full_name": result[1] # <--- ส่งชื่อเต็มกลับไปให้ Mobile ด้วย เผื่อเอาไปโชว์ในแอปว่า "Welcome, คุณ..."
+            }
+        else:
+            return {"status": "error", "message": "รหัสผ่านไม่ถูกต้อง"}
+        
+# ==========================================
+# 🚨 API ล้างตาราง (ใช้ชั่วคราวเพื่อแก้ Error 500)
+# ==========================================
+@app.delete("/reset-users-table")
+def reset_users_table():
+    with engine.connect() as conn:
+        # 1. สั่งลบตาราง users ตัวเก่าทิ้ง
+        conn.execute(text("DROP TABLE IF EXISTS users"))
+        conn.commit()
+        
+        # 2. สั่งสร้างตาราง users ตัวใหม่ (ที่มีช่อง full_name)
+        conn.execute(text("""
+            CREATE TABLE users (
+                id SERIAL PRIMARY KEY,
+                full_name VARCHAR(100) NOT NULL,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL
+            )
+        """))
+        conn.commit()
+    return {"status": "success", "message": "รีเซ็ตตาราง users และเพิ่มช่อง full_name เรียบร้อยแล้ว!"}
