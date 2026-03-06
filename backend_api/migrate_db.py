@@ -3,43 +3,41 @@ from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
 
-# --- 1. ตั้งค่า Path สำหรับหาไฟล์ ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(BASE_DIR, "app", ".env")  # ชี้ไปที่ไฟล์ .env ในโฟลเดอร์ app
-DATA_PATH = os.path.join(BASE_DIR, "data", "cleaned_all_recipes.pkl") # ดึงข้อมูลจากโฟลเดอร์ data
-
-# --- 2. โหลดการเชื่อมต่อฐานข้อมูล ---
-load_dotenv(ENV_PATH)
+# 1. โหลดค่าการเชื่อมต่อฐานข้อมูลจากไฟล์ .env
+load_dotenv(os.path.join("app", ".env"))
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    print("หา DATABASE_URL ไม่เจอ เช็คไฟล์ .env ด่วนครับ!")
-    exit()
 
 engine = create_engine(DATABASE_URL)
 
-# --- 3. โหลดข้อมูล ---
-print("1. กำลังอ่านข้อมูลจากไฟล์ .pkl...")
-df = pd.read_pickle(DATA_PATH)
+def migrate_data():
+    print("⏳ กำลังโหลดข้อมูลจากไฟล์ cleaned_all_recipes.pkl...")
+    df = pd.read_pickle(os.path.join("data", "cleaned_all_recipes.pkl"))
 
-# เลือกเฉพาะคอลัมน์ที่จะเอาไปใช้ในแอปจริงๆ เพื่อประหยัดพื้นที่ฐานข้อมูล
-cols_to_keep = ['id', 'name', 'category', 'minutes', 'calories', 'protein', 'ingredients', 'steps']
-# กรองเอาเฉพาะคอลัมน์ที่มีอยู่จริงใน df
-cols_to_keep = [col for col in cols_to_keep if col in df.columns]
-df_to_upload = df[cols_to_keep].copy()
+    print("🔄 กำลังแปลงโครงสร้างคอลัมน์ให้เข้ากับตารางใหม่...")
+    # 2. สร้าง DataFrame ตัวใหม่เพื่อจับคู่คอลัมน์ (Mapping)
+    df_mapped = pd.DataFrame()
+    df_mapped['title'] = df['name']          # เปลี่ยน name เป็น title
+    df_mapped['prep_time'] = df['minutes']   # เปลี่ยน minutes เป็น prep_time
+    df_mapped['calories'] = df['calories']   # calories คงเดิม
+    
+    # ถ้ามีคอลัมน์ steps ให้แปลงเป็น String แล้วใส่ในช่อง description
+    if 'steps' in df.columns:
+        df_mapped['description'] = df['steps'].apply(lambda x: str(x) if isinstance(x, list) else x)
+    else:
+        df_mapped['description'] = None
+        
+    # เว้นว่างช่องรูปภาพไว้ก่อน (ถ้าอนาคตมีรูปค่อยมาอัปเดต)
+    df_mapped['image_url'] = None 
 
-# --- 4. แปลงข้อมูล List เป็นข้อความ (Text) ---
-# ฐานข้อมูล SQL ทั่วไปจะไม่เข้าใจโครงสร้างแบบ Python List เราเลยต้องแปลงเป็นตัวหนังสือ (String) ก่อน
-print("2. กำลังแปลงชนิดข้อมูล...")
-for col in ['ingredients', 'steps']:
-    if col in df_to_upload.columns:
-        df_to_upload[col] = df_to_upload[col].astype(str)
+    print(f"📦 เตรียมข้อมูลสูตรอาหารทั้งหมด {len(df_mapped):,} รายการ...")
+    
+    # 3. นำเข้าข้อมูลลงตาราง recipes บน AWS RDS
+    print("🚀 กำลังอัปโหลดขึ้น AWS RDS (อาจใช้เวลา 1-3 นาที กรุณารอจนกว่าจะเสร็จ)...")
+    with engine.connect() as conn:
+        # ใช้ chunksize=5000 เพื่อแบ่งส่งข้อมูลทีละ 5,000 แถว ป้องกันเน็ตหลุดกลางทาง
+        df_mapped.to_sql('recipes', conn, if_exists='append', index=False, chunksize=5000)
+        
+    print("✅ อัปโหลดข้อมูลสูตรอาหารลงตาราง 'recipes' โครงสร้างใหม่สำเร็จเรียบร้อยแล้ว!")
 
-# --- 5. อัปโหลดข้อมูลขึ้น AWS RDS ---
-# if_exists='replace' หมายถึง ถ้ามีตารางชื่อนี้อยู่แล้ว ให้ลบทิ้งแล้วสร้างใหม่ทับลงไป
-print(f"3. กำลังอัปโหลดข้อมูล {len(df_to_upload)} เมนู ขึ้น AWS RDS...")
-print("⏳ (ขั้นตอนนี้อาจใช้เวลา 1-3 นาที ขึ้นอยู่กับความเร็วเน็ตและขนาดข้อมูล)")
-
-df_to_upload.to_sql('recipes', engine, if_exists='replace', index=False)
-
-print("อัปโหลดข้อมูลลงตาราง 'recipes' ใน AWS RDS สำเร็จเรียบร้อยแล้ว!")
+if __name__ == "__main__":
+    migrate_data()
