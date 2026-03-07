@@ -82,6 +82,16 @@ class ReviewAddSchema(BaseModel):
     recipe_id: int
     rating: int # 1 ถึง 5
     comment: Optional[str] = None
+class ShoppingListAddSchema(BaseModel):
+    user_id: int
+    ingredient_name: str
+    quantity: float
+    unit: str
+class AllergyAddSchema(BaseModel):
+    allergy_name: str
+
+class DietTypeAddSchema(BaseModel):
+    diet_name: str
 
 # ==========================================
 # 3. Helper Functions (ฟังก์ชันช่วยประมวลผล)
@@ -395,3 +405,297 @@ def get_history_by_date(user_id: int, target_date: date):
             "total": len(history_list), 
             "data": history_list
         }
+# ==========================================
+# 📖 API สำหรับหน้า รายละเอียดเมนู (Recipe Details)
+# ==========================================
+@app.get("/recipes/{recipe_id}/details")
+def get_recipe_details(recipe_id: int):
+    """
+    ดึงข้อมูลรายละเอียดสูตรอาหาร (แคลอรี, เวลาทำ, วัตถุดิบ, และวิธีทำ)
+    - recipe_id: รหัสเมนู (ดึงมาจากหน้า Search หรือ Histories)
+    """
+    with engine.connect() as conn:
+        # 1. ดึงข้อมูลหลักจากตาราง recipes
+        recipe = conn.execute(
+            text("""
+                SELECT title, calories, prep_time, description, image_url 
+                FROM recipes 
+                WHERE recipe_id = :r
+            """), 
+            {"r": recipe_id}
+        ).fetchone()
+        
+        if not recipe:
+            return {"status": "error", "message": "ไม่พบข้อมูลสูตรอาหารนี้"}
+            
+        title = recipe[0]
+        calories = recipe[1]
+        prep_time = recipe[2]
+        description = recipe[3]
+        
+        # 2. แปลง How to do it (description) จากข้อความให้กลายเป็น List (Array)
+        import ast
+        steps = []
+        if description:
+            try:
+                # แปลง "['step 1', 'step 2']" ให้เป็น List จริงๆ เพื่อให้ Mobile เอาไปทำข้อ 1. 2. 3. ได้ง่าย
+                steps = ast.literal_eval(description)
+            except:
+                steps = [description]
+                
+        # 3. ดึง Ingredients จาก AI Dataset (เพื่อความแม่นยำ)
+        recipe_ingredients = []
+        try:
+            ai_row = df_api[df_api['name'].str.lower() == title.lower()]
+            if not ai_row.empty:
+                recipe_ingredients = ai_row.iloc[0]['ingredients']
+                if isinstance(recipe_ingredients, str):
+                    recipe_ingredients = ast.literal_eval(recipe_ingredients)
+        except:
+            pass
+
+        return {
+            "status": "success",
+            "data": {
+                "recipe_id": recipe_id,
+                "title": title,                 # ชื่อเมนู
+                "calories": calories,           # แคลอรี
+                "prep_time": prep_time,         # เวลาเตรียม (นาที)
+                "ingredients": recipe_ingredients, # วัตถุดิบทั้งหมดที่ต้องใช้
+                "steps": steps                  # How to do it (วิธีทำ)
+            }
+        }
+# ==========================================
+# 🛒 API สำหรับหน้า Shopping List (Cart)
+# ==========================================
+@app.post("/shopping-list/add")
+def add_shopping_list_item(item: ShoppingListAddSchema):
+    """
+    เพิ่มรายการวัตถุดิบลงใน Shopping List (หน้า Cart)
+    """
+    with engine.connect() as conn:
+        # 1. เช็คว่ามีวัตถุดิบนี้ในตาราง ingredients หรือยัง (ค้นหาแบบไม่สนพิมพ์เล็ก/ใหญ่)
+        ing_result = conn.execute(
+            text("SELECT ingredient_id FROM ingredients WHERE name ILIKE :n"), 
+            {"n": item.ingredient_name}
+        ).fetchone()
+        
+        if ing_result:
+            ing_id = ing_result[0]
+        else:
+            # ถ้ายังไม่มี ให้เพิ่มใหม่และดึง ID กลับมา
+            new_ing = conn.execute(
+                text("INSERT INTO ingredients (name) VALUES (:n) RETURNING ingredient_id"), 
+                {"n": item.ingredient_name}
+            ).fetchone()
+            ing_id = new_ing[0]
+
+        # 2. เพิ่มลงตาราง shopping_lists
+        conn.execute(
+            text("""
+                INSERT INTO shopping_lists (user_id, ingredient_id, quantity, unit) 
+                VALUES (:u, :i, :q, :un)
+            """), 
+            {
+                "u": item.user_id, 
+                "i": ing_id, 
+                "q": item.quantity, 
+                "un": item.unit
+            }
+        )
+        conn.commit()
+        return {"status": "success", "message": f"เพิ่ม {item.ingredient_name} ลงในตะกร้าแล้ว!"}
+
+@app.get("/shopping-list/{user_id}")
+def get_shopping_list(user_id: int):
+    """
+    ดึงข้อมูล Shopping List ของผู้ใช้ไปแสดงผล
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT s.list_id, i.name, s.quantity, s.unit, s.is_bought 
+                FROM shopping_lists s
+                JOIN ingredients i ON s.ingredient_id = i.ingredient_id
+                WHERE s.user_id = :u
+                ORDER BY s.list_id DESC
+            """), 
+            {"u": user_id}
+        ).fetchall()
+        
+        shopping_list = []
+        for row in result:
+            shopping_list.append({
+                "list_id": row[0],
+                "ingredient_name": row[1],
+                "quantity": float(row[2]) if row[2] else 0, # ป้องกันค่า Null
+                "unit": row[3],
+                "is_bought": row[4] # เอาไว้เช็คว่าผู้ใช้กดติ๊กถูก (ซื้อแล้ว) หรือยัง
+            })
+            
+        return {"status": "success", "total": len(shopping_list), "data": shopping_list}
+
+@app.delete("/shopping-list/remove/{list_id}")
+def remove_shopping_list_item(list_id: int):
+    """
+    ลบรายการออกจาก Shopping List
+    """
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM shopping_lists WHERE list_id = :l"), {"l": list_id})
+        conn.commit()
+        return {"status": "success", "message": "ลบรายการเรียบร้อยแล้ว!"}
+# ==========================================
+# ⚙️ API สำหรับหน้า Personal Information
+# ==========================================
+
+# 1. API ดึงข้อมูลโปรไฟล์ไปแสดงผล
+@app.get("/user/{user_id}/profile")
+def get_user_profile(user_id: int):
+    """
+    ดึงข้อมูลโปรไฟล์ผู้ใช้ รวมถึงรายการแพ้อาหารและรูปแบบการกิน
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT display_name, allergies, diet_type FROM users WHERE user_id = :u"),
+            {"u": user_id}
+        ).fetchone()
+        
+        if not result:
+            return {"status": "error", "message": "ไม่พบผู้ใช้งานนี้"}
+            
+        # หั่นคำที่คั่นด้วยลูกน้ำ (,) ให้กลายเป็น List เพื่อให้ Mobile นำไปโชว์ทีละกล่องได้ง่าย
+        allergies_list = [a.strip() for a in result[1].split(",")] if result[1] else []
+        diet_list = [d.strip() for d in result[2].split(",")] if result[2] else []
+            
+        return {
+            "status": "success",
+            "data": {
+                "display_name": result[0],
+                "allergies": allergies_list,
+                "diet_types": diet_list
+            }
+        }
+
+# 2. API เพิ่มรายการแพ้อาหาร (Food Allergies)
+@app.post("/user/{user_id}/allergies/add")
+def add_user_allergy(user_id: int, payload: AllergyAddSchema):
+    with engine.connect() as conn:
+        curr = conn.execute(text("SELECT allergies FROM users WHERE user_id = :u"), {"u": user_id}).fetchone()
+        
+        current_allergies = curr[0] if curr and curr[0] else ""
+        
+        # ถ่ายข้อมูลเดิมมาต่อด้วยของใหม่ (ถ้ายังไม่มีของเดิมก็ใส่ของใหม่เลย)
+        if current_allergies:
+            # ป้องกันการเพิ่มข้อมูลซ้ำ
+            if payload.allergy_name.lower() not in current_allergies.lower():
+                new_allergies = f"{current_allergies}, {payload.allergy_name}"
+            else:
+                new_allergies = current_allergies
+        else:
+            new_allergies = payload.allergy_name
+
+        conn.execute(
+            text("UPDATE users SET allergies = :a WHERE user_id = :u"),
+            {"a": new_allergies, "u": user_id}
+        )
+        conn.commit()
+        return {"status": "success", "message": "เพิ่มประวัติแพ้อาหารเรียบร้อย", "updated_allergies": new_allergies}
+
+# 3. API เพิ่มรูปแบบการกิน (Diet Type)
+@app.post("/user/{user_id}/diet-type/add")
+def add_user_diet(user_id: int, payload: DietTypeAddSchema):
+    with engine.connect() as conn:
+        curr = conn.execute(text("SELECT diet_type FROM users WHERE user_id = :u"), {"u": user_id}).fetchone()
+        
+        current_diet = curr[0] if curr and curr[0] else ""
+        
+        if current_diet:
+            if payload.diet_name.lower() not in current_diet.lower():
+                new_diet = f"{current_diet}, {payload.diet_name}"
+            else:
+                new_diet = current_diet
+        else:
+            new_diet = payload.diet_name
+
+        conn.execute(
+            text("UPDATE users SET diet_type = :d WHERE user_id = :u"),
+            {"d": new_diet, "u": user_id}
+        )
+        conn.commit()
+        return {"status": "success", "message": "เพิ่มรูปแบบการกินเรียบร้อย", "updated_diet_types": new_diet}
+# ==========================================
+# ⚙️ ตรวจสอบและอัปเดตฐานข้อมูล (Auto-Patch)
+# ==========================================
+# สั่งให้ระบบสร้างคอลัมน์ target_cal อัตโนมัติ (ถ้ายังไม่มี)
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS target_cal INT;"))
+        conn.commit()
+except Exception as e:
+    print(f"DB Patch Note: {e}")
+
+# ==========================================
+# 📝 Pydantic Schema สำหรับอัปเดตโปรไฟล์
+# ==========================================
+class UserEditProfileSchema(BaseModel):
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    password: Optional[str] = None
+    target_cal: Optional[int] = None
+
+# ==========================================
+# 👤 API สำหรับแก้ไขข้อมูลบัญชีผู้ใช้
+# ==========================================
+@app.put("/user/{user_id}/edit")
+def edit_user_profile(user_id: int, payload: UserEditProfileSchema):
+    """
+    อัปเดตข้อมูลผู้ใช้ (Email, Name, Password, Target Calories)
+    - สามารถส่งมาแค่บางฟิลด์ได้ ฟิลด์ไหนไม่ส่งมาจะไม่ถูกแก้ไข
+    - หากเป็นวันถัดไป ต้องการแก้ไข Target ก็สามารถยิงมาอัปเดตใหม่ได้เลย
+    """
+    updates = []
+    params = {"u": user_id}
+
+    # 1. ตรวจสอบว่าต้องการอัปเดต Email ไหม
+    if payload.email:
+        updates.append("email = :e")
+        params["e"] = payload.email
+        
+    # 2. ตรวจสอบว่าต้องการอัปเดต ชื่อ (Name) ไหม
+    if payload.display_name:
+        updates.append("display_name = :d")
+        params["d"] = payload.display_name
+        
+    # 3. ตรวจสอบว่าต้องการอัปเดต รหัสผ่าน ไหม
+    if payload.password and len(payload.password.strip()) > 0:
+        hashed_pw = pwd_context.hash(payload.password)
+        updates.append("password = :p")
+        params["p"] = hashed_pw
+        
+    # 4. ตรวจสอบว่าต้องการอัปเดต เป้าหมายแคลอรี ไหม (รองรับการใส่ 0 หรือค่าใหม่)
+    if payload.target_cal is not None:
+        updates.append("target_cal = :t")
+        params["t"] = payload.target_cal
+
+    # ถ้าไม่มีอะไรส่งมาให้แก้เลย
+    if not updates:
+        return {"status": "error", "message": "ไม่มีข้อมูลให้แก้ไข"}
+
+    # สร้างคำสั่ง SQL แบบไดนามิก (อัปเดตเฉพาะช่องที่มีข้อมูล)
+    update_query = f"UPDATE users SET {', '.join(updates)} WHERE user_id = :u"
+
+    with engine.connect() as conn:
+        # เช็คก่อนว่า Email ใหม่ที่ตั้ง แอบไปซ้ำกับคนอื่นในระบบไหม
+        if payload.email:
+            check_email = conn.execute(
+                text("SELECT user_id FROM users WHERE email = :e AND user_id != :u"), 
+                {"e": payload.email, "u": user_id}
+            ).fetchone()
+            if check_email:
+                return {"status": "error", "message": "Email นี้ถูกใช้งานโดยบัญชีอื่นแล้ว"}
+
+        # บันทึกข้อมูลลงฐานข้อมูล
+        conn.execute(text(update_query), params)
+        conn.commit()
+
+    return {"status": "success", "message": "อัปเดตข้อมูลโปรไฟล์เรียบร้อยแล้ว!"}
