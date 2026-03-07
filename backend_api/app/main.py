@@ -54,7 +54,6 @@ class RecipeResult(BaseModel):
     missing_ingredients: List[str]
     all_ingredients: List[str]
 
-# สำหรับ User Login / Register (โครงสร้าง DB ใหม่)
 class UserRegisterSchema(BaseModel):
     email: str
     password: str
@@ -216,6 +215,45 @@ def login(user: UserLoginSchema):
 # ==========================================
 # ❄️ 5. API จัดการของในตู้เย็น (Fridge)
 # ==========================================
+@app.get("/fridge/{user_id}")
+def get_fridge_items(user_id: int):
+    """
+    ดึงรายการวัตถุดิบทั้งหมดในตู้เย็นของผู้ใช้
+    เรียงลำดับตามของที่ใกล้หมดอายุก่อน (ขึ้นก่อน)
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT f.fridge_id, i.name, f.quantity, f.unit, f.expiry_date 
+                FROM fridge_items f
+                JOIN ingredients i ON f.ingredient_id = i.ingredient_id
+                WHERE f.user_id = :u
+                ORDER BY f.expiry_date ASC
+            """), 
+            {"u": user_id}
+        ).fetchall()
+        
+        fridge_list = []
+        today = date.today()
+        
+        for row in result:
+            expiry = row[4]
+            days_remaining = None
+            
+            # คำนวณจำนวนวันคงเหลือ (ถ้ามีการใส่วันหมดอายุมา)
+            if expiry:
+                days_remaining = (expiry - today).days
+
+            fridge_list.append({
+                "fridge_id": row[0],
+                "ingredient_name": row[1],
+                "quantity": float(row[2]) if row[2] else 0.0,
+                "unit": row[3],
+                "expiry_date": expiry.strftime("%Y-%m-%d") if expiry else None,
+                "days_remaining": days_remaining # ส่งจำนวนวันไปให้ Mobile เช็คสี
+            })
+            
+        return {"status": "success", "total": len(fridge_list), "data": fridge_list}
 @app.post("/fridge/add")
 def add_fridge_item(item: FridgeItemAddSchema):
     with engine.connect() as conn:
@@ -699,3 +737,28 @@ def edit_user_profile(user_id: int, payload: UserEditProfileSchema):
         conn.commit()
 
     return {"status": "success", "message": "อัปเดตข้อมูลโปรไฟล์เรียบร้อยแล้ว!"}
+@app.get("/user/{user_id}/account")
+def get_account_management(user_id: int):
+    """
+    ดึงข้อมูลโปรไฟล์ (Email, Name, Target) เพื่อนำไปโชว์ในช่องกรอกข้อมูล
+    *หมายเหตุ: ไม่ส่ง Password กลับไปเพื่อความปลอดภัย 
+    ให้ฝั่ง Mobile แสดงเป็น Placeholder เช่น ******** แทน
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT email, display_name, target_cal FROM users WHERE user_id = :u"),
+            {"u": user_id}
+        ).fetchone()
+        
+        if not result:
+            return {"status": "error", "message": "ไม่พบผู้ใช้งานนี้"}
+            
+        return {
+            "status": "success",
+            "data": {
+                "email": result[0],
+                "display_name": result[1],
+                "target_cal": result[2] if result[2] else "", # ถ้ายังไม่เคยตั้งเป้าหมาย จะส่งเป็นค่าว่างไปให้พิมพ์
+                "password": "" # ส่งค่าว่างไปให้ Mobile App โชว์ ******** แทน
+            }
+        }
