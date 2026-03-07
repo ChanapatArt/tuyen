@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/screens/home.dart';
 import 'package:mobile_app/screens/signup.dart';
+import 'package:mobile_app/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -80,11 +81,27 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => const Home()),
+                  onPressed: () async {
+                    FocusScope.of(context).unfocus();
+                    // // 1. เรียกใช้ API
+                    bool success = await AuthService.login(
+                      _userController.text,
+                      _passwordController.text,
                     );
+                    if (!mounted) return;
+                    if (success){
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const Home()),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("อีเมลหรือรหัสผ่านไม่ถูกต้อง"),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
@@ -145,7 +162,7 @@ class _LoginPageState extends State<LoginPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

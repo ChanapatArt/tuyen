@@ -1,23 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/widgets/foodItem_card.dart';
 
-class IngredientList extends StatelessWidget {
-  final List<Map<String, dynamic>> foodItems;
-  final Function(int) onToggleSelection;
+class IngredientList extends StatefulWidget {
   final VoidCallback onFindMenu;
-  const IngredientList({
-    super.key,
-    required this.onFindMenu,
-    required this.foodItems,
-    required this.onToggleSelection,
-  });
+
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController qtyController = TextEditingController();
+  final TextEditingController expireController = TextEditingController();
+
+  IngredientList({super.key, required this.onFindMenu});
+  @override
+  State<IngredientList> createState() => _IngredientList();
+}
+
+class _IngredientList extends State<IngredientList> {
+  DateTime? _selectedDate;
+  final List<Map<String, dynamic>> _foodItems = [
+    {
+      'title': 'Egg',
+      'subtitle': 'Remaining: 4 eggs',
+      'expiryDate': DateTime(2026, 3, 15),
+      'color': Colors.green,
+      'isSelected': false,
+    },
+    {
+      'title': 'Minced pork',
+      'subtitle': 'Remaining: 300g',
+      'expiryDate': DateTime(2026, 3, 15),
+      'color': Colors.orange,
+      'isSelected': false,
+      'isNearExpiry': true,
+    },
+    {
+      'title': 'Spring onion',
+      'subtitle': '2 plants',
+      'expiryDate': DateTime(2026, 3, 15),
+      'color': Colors.red,
+      'isSelected': false,
+      'isNearExpiry': true,
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-      backgroundColor: Colors.white,
+        backgroundColor: Colors.white,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -40,7 +69,9 @@ class IngredientList extends StatelessWidget {
               color: Colors.green,
               size: 30,
             ),
-            onPressed: () {},
+            onPressed: () {
+              _showAddIngredientDialog(context);
+            },
           ),
         ],
         toolbarHeight: 65,
@@ -60,18 +91,52 @@ class IngredientList extends StatelessWidget {
         child: Column(
           children: [
             const ExpiryAlertCard(),
-            ...foodItems.asMap().entries.map((entry) {
+            ..._foodItems.asMap().entries.map((entry) {
               int index = entry.key;
               var item = entry.value;
+              int daysLeft = _calculateRemainingDays(item['expiryDate']);
 
-              return FoodItemCard(
-                title: item['title'],
-                subtitle: item['subtitle'],
-                remainingDays: item['days'],
-                statusColor: item['color'],
-                isSelected: item['isSelected'],
-                isNearExpiry: item['isNearExpiry'] ?? false,
-                onTap: () => {onToggleSelection(index)},
+              return Dismissible(
+                key: UniqueKey(),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  margin: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade400,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  child: const Icon(Icons.delete, color: Colors.white),
+                ),
+                onDismissed: (direction) {
+                  setState(() {
+                    _foodItems.removeAt(index); // ลบข้อมูลออกจาก List
+                  });
+
+                  // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("${item['title']} removed")),
+                  );
+                },
+
+                child: FoodItemCard(
+                  title: item['title'],
+                  subtitle: item['subtitle'],
+                  remainingDays: '$daysLeft Day',
+                  statusColor: item['color'],
+                  isSelected: item['isSelected'],
+                  isNearExpiry: item['isNearExpiry'] ?? false,
+                  onTap: () => {
+                    setState(() {
+                      _foodItems[index]['isSelected'] =
+                          !_foodItems[index]['isSelected'];
+                    }),
+                  },
+                ),
               );
             }),
             SizedBox(height: 75),
@@ -85,15 +150,15 @@ class IngredientList extends StatelessWidget {
         child: FloatingActionButton.extended(
           onPressed: () {
             // เมื่อกดเอาเฉพาะไอเทมที่ isSelected เป็น true
-            onFindMenu();
-            final selectedItems = foodItems
+            widget.onFindMenu();
+            final selectedItems = _foodItems
                 .where((item) => item['isSelected'] == true)
                 .toList();
             print(
               "เมนูแนะนำสำหรับ: ${selectedItems.map((e) => e['title']).toList()}",
             );
           },
-          backgroundColor: const Color(0xFF00C853),
+          backgroundColor: Colors.green,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -112,6 +177,161 @@ class IngredientList extends StatelessWidget {
       ),
 
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  void _showAddIngredientDialog(BuildContext context) {
+    widget.nameController.clear();
+    widget.qtyController.clear();
+    widget.expireController.clear();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Ingredient name",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                // ส่ง Controller เข้าไปเพื่อให้ดึงค่าได้
+                _buildModalTextField(
+                  hintText: "Cheese",
+                  controller: widget.nameController,
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Quantity",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildModalTextField(
+                            hintText: "3",
+                            controller: widget.qtyController,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ListTile(
+                            title: Text(
+                              "Exp Date: ${widget.expireController.text}",
+                            ),
+                            trailing: Icon(Icons.calendar_today),
+                            onTap: () async {
+                              DateTime? pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime.now(), // ห้ามเลือกย้อนหลัง
+                                lastDate: DateTime(2100),
+                              );
+                              if (pickedDate != null) {
+                                setState(() {
+                                  widget.expireController.text =
+                                      "${pickedDate.toLocal()}".split(' ')[0];
+                                  _selectedDate = pickedDate;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "Unit",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                // ส่ง Controller เข้าไปเพื่อให้ดึงค่าได้
+                _buildModalTextField(
+                  hintText: "sheets",
+                  controller: widget.nameController,
+                ),
+
+                const SizedBox(height: 24),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (widget.nameController.text.isNotEmpty &&
+                              _selectedDate != null) {
+                            setState(() {
+                              _foodItems.add({
+                                'title': widget.nameController.text,
+                                'subtitle':
+                                    'Remaining: ${widget.qtyController.text}',
+                                'expiryDate': _selectedDate,
+                                'color': Colors.green, // ตั้งค่าสีเริ่มต้น
+                                'isSelected': false,
+                              });
+                            });
+                            Navigator.pop(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF28B446),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          "OK",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF41F11),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          "Cancle",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -162,4 +382,33 @@ class ExpiryAlertCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildModalTextField({
+  required String hintText,
+  TextEditingController? controller,
+}) {
+  return TextField(
+    controller: controller,
+    decoration: InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: Colors.grey),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.grey),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+    ),
+  );
+}
+
+int _calculateRemainingDays(DateTime expiryDate) {
+  final now = DateTime.now();
+  // คำนวณส่วนต่างของเวลา
+  final difference = expiryDate.difference(now).inDays;
+  return difference;
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'home.dart';
 import 'dart:async';
+import 'package:mobile_app/services/auth_service.dart';
+import 'package:mobile_app/screens/login.dart';
 
 class Splash extends StatefulWidget {
   const Splash({super.key});
@@ -9,8 +11,7 @@ class Splash extends StatefulWidget {
   State<Splash> createState() => _SplashState();
 }
 
-class _SplashState extends State<Splash>
-    with SingleTickerProviderStateMixin {
+class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -33,14 +34,23 @@ class _SplashState extends State<Splash>
   }
 
   void loadDataAndNavigate() async {
-    await Future.delayed(const Duration(seconds: 3)); // จำลองการโหลดข้อมูลจริงๆ 3 วินาที
-
+    String? userId = await AuthService.getUserId();
+    await Future.delayed(
+      const Duration(seconds: 3),
+    ); // จำลองการโหลดข้อมูลจริงๆ 3 วินาที
     // เมื่อโหลดเสร็จ ค่อยย้ายไปหน้า Home
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const Home()),
-      );
+      if (userId != null && userId.isNotEmpty) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const Home()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+      }
     }
   }
 
@@ -53,25 +63,18 @@ class _SplashState extends State<Splash>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.white,
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ScaleTransition(
               scale: _animation,
-              child: Image.asset(
-                'assets/images/logo.png',
-                width: 150,
-              ),
+              child: Image.asset('assets/images/logo.png', width: 150),
             ),
-            Text("TuYen",
-            style: 
-              TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold
-            ),
+            Text(
+              "TuYen",
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
           ],
         ),

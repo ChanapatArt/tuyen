@@ -3,13 +3,7 @@ import 'package:mobile_app/widgets/ingredient_list.dart';
 import 'package:mobile_app/screens/menu_results.dart';
 
 class HomeSubNavigator extends StatefulWidget {
-  final List<Map<String, dynamic>> foodItems;
-  final Function(int) onToggleSelection;
-  const HomeSubNavigator({
-    super.key,
-    required this.foodItems,
-    required this.onToggleSelection,
-  });
+  const HomeSubNavigator({super.key});
 
   @override
   State<HomeSubNavigator> createState() => _HomeSubNavigatorState();
@@ -49,11 +43,7 @@ class _HomeSubNavigatorState extends State<HomeSubNavigator> {
         physics: const NeverScrollableScrollPhysics(),
         onPageChanged: (index) => setState(() => _currentPage = index),
         children: [
-          IngredientList(
-            onFindMenu: _goToResults,
-            foodItems: widget.foodItems,
-            onToggleSelection: widget.onToggleSelection,
-          ),
+          IngredientList(onFindMenu: _goToResults),
           MenuResultsScreen(
             onBack: () => _subPageController.previousPage(
               duration: const Duration(milliseconds: 300),

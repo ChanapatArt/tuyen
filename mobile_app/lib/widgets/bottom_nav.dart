@@ -41,12 +41,12 @@ class _BottomNavState extends State<BottomNav> {
             label: 'Search',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            label: 'Plan',
+            icon: Icon(Icons.history),
+            label: 'Histories',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.shopping_cart_outlined),
-            label: 'Shopping List',
+            label: 'Cart',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

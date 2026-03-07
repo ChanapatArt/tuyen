@@ -7,71 +7,73 @@ class CommunityReviews extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16, top: 16, right: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    margin: EdgeInsets.only(right: 8, top: 6.5),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: const Icon(Icons.arrow_back, size: 20),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    "Community reviews",
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 16, top: 16, right: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      margin: EdgeInsets.only(right: 8, top: 6.5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: const Icon(Icons.arrow_back, size: 20),
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: Text(
+                      "Community reviews",
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          // 1. รายการรีวิว (ใช้ Expanded เพื่อให้กินพื้นที่ที่เหลือ)
-          Expanded(
-            child: ListView(
+            // 1. รายการรีวิว (ใช้ Expanded เพื่อให้กินพื้นที่ที่เหลือ)
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildReviewCard(
+                    userName: "User_99",
+                    time: "2 hours ago",
+                    comment:
+                        "This recipe is so easy, even dorm students can make it!",
+                    initial: "U",
+                    rating: 4,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildReviewCard(
+                    userName: "HealtyGuy",
+                    time: "1 day ago",
+                    comment:
+                        "Reduce the oil a bit; it'll be delicious and healthier.",
+                    initial: "H",
+                    rating: 5,
+                  ),
+                ],
+              ),
+            ),
+        
+            // 2. ส่วนพิมพ์รีวิว (ติดอยู่ด้านล่าง)
+            Padding(
               padding: const EdgeInsets.all(16),
-              children: [
-                _buildReviewCard(
-                  userName: "User_99",
-                  time: "2 hours ago",
-                  comment:
-                      "This recipe is so easy, even dorm students can make it!",
-                  initial: "U",
-                  rating: 4,
-                ),
-                const SizedBox(height: 16),
-                _buildReviewCard(
-                  userName: "HealtyGuy",
-                  time: "1 day ago",
-                  comment:
-                      "Reduce the oil a bit; it'll be delicious and healthier.",
-                  initial: "H",
-                  rating: 5,
-                ),
-              ],
+              child: _buildReviewInput(),
             ),
-          ),
-
-          // 2. ส่วนพิมพ์รีวิว (ติดอยู่ด้านล่าง)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: _buildReviewInput(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

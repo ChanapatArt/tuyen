@@ -53,12 +53,7 @@ class Search extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _buildTag("Thai food"),
-                  _buildTag("Clean"),
-                  _buildTag("Easy to do"),
-                  _buildTag("Dessert"),
-                  _buildTag("High protein"),
-                  _buildTag("Vegetarian food"),
+                  _buildTag("Minced pork omelet"),
                 ],
               ),
               const SizedBox(height: 24),

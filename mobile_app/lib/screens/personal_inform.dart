@@ -1,21 +1,152 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/screens/account_page.dart';
 import 'package:mobile_app/screens/login.dart';
-import 'package:mobile_app/screens/nutrition.dart';
+import 'package:mobile_app/services/auth_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
-class PersonalPage extends StatefulWidget {
-  const PersonalPage({super.key});
+class PersonalInfoPage extends StatefulWidget {
+  const PersonalInfoPage({super.key});
 
   @override
-  State<PersonalPage> createState() => _PersonalPageState();
+  State<PersonalInfoPage> createState() => _PersonalInfoPageState();
 }
 
-class _PersonalPageState extends State<PersonalPage> {
-  // สถานะสำหรับเลือกเป้าหมาย (0 = Keep in shape, 1 = Lose weight)
-  int _targetIndex = 0;
+class _PersonalInfoPageState extends State<PersonalInfoPage> {
+  String displayName = "Loading...";
+  String email = "";
+  List<String> foodAllergies = [];
+  List<String> dietTypes = [];
+  bool isLoading = true;
 
-  // สถานะการติ๊กอาการแพ้อาหาร
-  bool _isPeanutsAllergy = false;
-  bool _isSeafoodAllergy = false;
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserProfile(); // ดึงข้อมูลทันทีเมื่อเปิดหน้า
+  }
+
+  Future<void> _fetchUserProfile() async {
+    String? userId = await AuthService.getUserId();
+    if (userId == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('${AuthService.baseUrl}/user/$userId/profile'),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+        if (responseData['status'] == 'success') {
+          final data = responseData['data'];
+          setState(() {
+            displayName = data['display_name'] ?? "No Name";
+            foodAllergies = List<String>.from(data['allergies'] ?? []);
+            dietTypes = List<String>.from(data['diet_types'] ?? []);
+            isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching profile: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  final TextEditingController _inputController = TextEditingController();
+
+  // --- ฟังก์ชันแสดง Dialog แบบ Custom ---
+  void _showCustomDialog(String title, List<String> targetList) {
+    _inputController.clear();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0), // คุมระยะห่างด้วยตัวเอง
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _inputController,
+                  decoration: InputDecoration(
+                    hintText: "Seafood",
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (_inputController.text.isNotEmpty) {
+                            setState(() {
+                              // ✅ เพิ่มข้อมูลลง List และหน้าจอจะอัปเดตทันที
+                              targetList.add(_inputController.text);
+                            });
+                            Navigator.pop(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF28B446),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          "OK",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF41F11),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          "Cancle",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,163 +154,105 @@ class _PersonalPageState extends State<PersonalPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. หัวข้อและไอคอนตั้งค่า
-              Row(
-                children: [
-                  const Text(
-                    "Personal information",
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.settings_outlined, size: 28),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
               const SizedBox(height: 20),
+              _buildHeader(),
+              const SizedBox(height: 20),
+              _buildCalorieCard(), // ใช้ตัวเดิมที่คุณชอบ
+              const SizedBox(height: 25),
 
-              // 2. Profile Card (สีเขียวอ่อน)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8FAF0),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFB2E7C6)),
-                ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.white,
-                      // สามารถใส่รูปได้ที่นี่: backgroundImage: AssetImage(...),
-                    ),
-                    const SizedBox(width: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Data Scientist Chef",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1B5E20),
-                          ),
-                        ),
-                        Text(
-                          "Free Member",
-                          style: TextStyle(color: Colors.green.shade700),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // 3. ส่วน Target
-              const Text(
-                "Target",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _buildTargetButton(0, "Keep in shape"),
-                  const SizedBox(width: 12),
-                  _buildTargetButton(1, "Lose weight"),
-                ],
-              ),
-              const SizedBox(height: 30),
-
-              // 4. ส่วน Food allergies
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Food allergies",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const Icon(
-                    Icons.add_circle_outline,
-                    color: Color(0xFF28B446),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildAllergyItem(
-                "Peanuts",
-                _isPeanutsAllergy,
-                (val) => setState(() => _isPeanutsAllergy = val!),
+              // 2. แสดงรายการ Food Allergies ตามจำนวนจริง
+              _buildSectionHeader(
+                "Food allergies",
+                () => _showCustomDialog("Food allergies", foodAllergies),
               ),
               const SizedBox(height: 10),
-              _buildAllergyItem(
-                "Seafood",
-                _isSeafoodAllergy,
-                (val) => setState(() => _isSeafoodAllergy = val!),
+              ...foodAllergies.map(
+                (item) => Dismissible(
+                  key: UniqueKey(),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+
+                  // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
+                  onDismissed: (direction) {
+                    setState(() {
+                      foodAllergies.remove(item); // ลบข้อมูลออกจาก List
+                    });
+
+                    // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text("$item removed")));
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildInfoTile(item),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 15),
+
+              // 3. แสดงรายการ Diet type ตามจำนวนจริง
+              _buildSectionHeader(
+                "Diet type",
+                () => _showCustomDialog("Diet type", dietTypes),
+              ),
+              const SizedBox(height: 10),
+              ...dietTypes.map(
+                (item) => Dismissible(
+                  key: UniqueKey(),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+
+                  // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
+                  onDismissed: (direction) {
+                    setState(() {
+                      dietTypes.remove(item); // ลบข้อมูลออกจาก List
+                    });
+
+                    // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text("$item removed")));
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildInfoTile(item),
+                  ),
+                ),
               ),
 
               const SizedBox(height: 30),
-
-              // 5. ปุ่ม Log out (สีแดงจาง)
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoginPage(),
-                      ),
-                      (route) => false, // false หมายถึงไม่เก็บหน้าเก่าไว้เลย
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFEBEE),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    "Log out",
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 50), // เว้นที่ว่างก่อนถึงปุ่มล่างสุด
-              // 6. ปุ่ม Look at nutrition
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => NutritionPage()),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.auto_awesome,
-                    color: Color(0xFF28B446),
-                  ),
-                  label: const Text("Look at nutrition"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
+              _buildSignOutButton(),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -187,52 +260,182 @@ class _PersonalPageState extends State<PersonalPage> {
     );
   }
 
-  // Helper: สร้างปุ่มเลือกเป้าหมาย
-  Widget _buildTargetButton(int index, String label) {
-    bool isSelected = _targetIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _targetIndex = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? Colors.grey.shade400 : Colors.grey.shade200,
-              width: isSelected ? 2 : 1,
-            ),
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        const Text(
+          "Personal information",
+          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(width: 8),
+        const Icon(Icons.settings_outlined, size: 28),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, VoidCallback onAdd) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        GestureDetector(
+          onTap: onAdd,
+          child: const Icon(
+            Icons.add_circle_outline,
+            color: Color(0xFF28B446),
+            size: 28,
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoTile(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Text(text, style: const TextStyle(fontSize: 16)),
+    );
+  }
+
+  Widget _buildCalorieCard() {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AccountPage()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF071E1D),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Color(0xFF1F1F1F),
+                  child: Text(
+                    displayName.isNotEmpty
+                        ? displayName[0].toUpperCase()
+                        : "?", // ใช้ตัวอักษรแรกของชื่อ
+                    style: const TextStyle(color: Colors.white, fontSize: 24),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        email,
+                        style: TextStyle(color: Colors.green, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 20),
+            const Text(
+              "Total calories (target 2000)",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+            ),
+            const SizedBox(height: 5),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  "1,250",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "Kcal",
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 15),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: const LinearProgressIndicator(
+                value: 1250 / 2000,
+                minHeight: 10,
+                backgroundColor: Colors.white10,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // Helper: สร้างรายการแพ้อาหารพร้อม Checkbox
-  Widget _buildAllergyItem(
-    String label,
-    bool value,
-    Function(bool?) onChanged,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: CheckboxListTile(
-        title: Text(label, style: const TextStyle(fontSize: 16)),
-        value: value,
-        onChanged: onChanged,
-        activeColor: const Color(0xFF28B446),
-        controlAffinity: ListTileControlAffinity.leading,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _buildSignOutButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () async {
+          // 1. ลบข้อมูล User Session ออกจากเครื่อง
+          await AuthService.logout(); // เรียกใช้ฟังก์ชันที่เราสร้างไว้ใน AuthService
+
+          // 2. ย้อนกลับไปหน้า Login และล้าง History ของหน้าก่อนๆ ทั้งหมด
+          if (context.mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginPage()),
+              (route) => false, // ล้าง stack หน้าจอทั้งหมดทิ้ง
+            );
+          }
+        },
+        icon: const Icon(Icons.logout, color: Colors.red),
+        label: const Text(
+          "Sign Out",
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFFEBEE),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
       ),
     );
   }
