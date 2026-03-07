@@ -91,6 +91,8 @@ class AllergyAddSchema(BaseModel):
 
 class DietTypeAddSchema(BaseModel):
     diet_name: str
+class ForgotPasswordSchema(BaseModel):
+    email: str
 
 # ==========================================
 # 3. Helper Functions (ฟังก์ชันช่วยประมวลผล)
@@ -191,6 +193,7 @@ def register(user: UserRegisterSchema):
         return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
 
 # 4.5 เข้าสู่ระบบ (Login)
+
 @app.post("/login")
 def login(user: UserLoginSchema):
     with engine.connect() as conn:
@@ -209,7 +212,35 @@ def login(user: UserLoginSchema):
             }
         else:
             return {"status": "error", "message": "รหัสผ่านไม่ถูกต้อง"}
+# ==========================================
+# 🔄 1. API สำหรับรีเซ็ตรหัสผ่านเป็น "1234"
+# ==========================================
+@app.post("/user/reset-password")
+def reset_password(payload: ForgotPasswordSchema):
+    """
+    รีเซ็ตรหัสผ่านของผู้ใช้เป็น "1234" (ตามหน้า UI Forgot Password)
+    โดยรับค่า Email เพื่อค้นหาบัญชี
+    """
+    with engine.connect() as conn:
+        # เช็คก่อนว่ามี Email นี้ในระบบไหม
+        user = conn.execute(
+            text("SELECT user_id FROM users WHERE email = :e"), 
+            {"e": payload.email}
+        ).fetchone()
         
+        if not user:
+            return {"status": "error", "message": "ไม่พบ Email นี้ในระบบ กรุณาสมัครสมาชิกใหม่"}
+        
+        # เข้ารหัสผ่าน "1234" แล้วอัปเดตลงฐานข้อมูล
+        new_hashed_pw = pwd_context.hash("1234")
+        
+        conn.execute(
+            text("UPDATE users SET password = :p WHERE email = :e"),
+            {"p": new_hashed_pw, "e": payload.email}
+        )
+        conn.commit()
+        
+        return {"status": "success", "message": "รีเซ็ตรหัสผ่านเป็น 1234 เรียบร้อยแล้ว!"}
 
 
 # ==========================================
@@ -364,6 +395,35 @@ def remove_review(review_id: int):
         conn.execute(text("DELETE FROM reviews WHERE review_id = :r"), {"r": review_id})
         conn.commit()
         return {"status": "success", "message": "ลบรีวิวเรียบร้อยแล้ว!"}
+@app.get("/recipes/{recipe_id}/reviews")
+def get_recipe_reviews(recipe_id: int):
+    """
+    ดึงข้อมูลรีวิวทั้งหมดของเมนูอาหารนั้นๆ พร้อมชื่อคนรีวิว
+    """
+    with engine.connect() as conn:
+        # จอยตาราง reviews กับ users เพื่อเอา display_name (ชื่อคนรีวิว) มาแสดง
+        result = conn.execute(
+            text("""
+                SELECT r.review_id, r.rating, r.comment, r.created_at, u.display_name
+                FROM reviews r
+                JOIN users u ON r.user_id = u.user_id
+                WHERE r.recipe_id = :rec
+                ORDER BY r.created_at DESC
+            """),
+            {"rec": recipe_id}
+        ).fetchall()
+        
+        reviews_list = []
+        for row in result:
+            reviews_list.append({
+                "review_id": row[0],
+                "rating": row[1],             # คะแนน 1-5 ดาว
+                "comment": row[2],            # ข้อความรีวิว
+                "created_at": row[3].strftime("%Y-%m-%d %H:%M:%S") if row[3] else None,
+                "reviewer_name": row[4]       # ชื่อคนรีวิว
+            })
+            
+        return {"status": "success", "total": len(reviews_list), "data": reviews_list}
 
 # ==========================================
 # 🔍 API สำหรับหน้า Search Menu
