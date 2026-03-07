@@ -25,7 +25,9 @@ def create_all_tables():
                 password VARCHAR(255) NOT NULL,
                 display_name VARCHAR(100),
                 allergies TEXT,
-                diet_type VARCHAR(50)
+                diet_type VARCHAR(50),
+                targetCal INT
+                          
             )
         """))
 
@@ -46,7 +48,7 @@ def create_all_tables():
             CREATE TABLE ingredients (
                 ingredient_id SERIAL PRIMARY KEY,
                 name VARCHAR(100) NOT NULL,
-                category VARCHAR(50)
+                category VARCHAR(150)
             )
         """))
 
@@ -69,18 +71,18 @@ def create_all_tables():
                 recipe_id INT REFERENCES recipes(recipe_id) ON DELETE CASCADE,
                 ingredient_id INT REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
                 quantity DECIMAL(10, 2),
-                unit VARCHAR(20)
+                unit VARCHAR(80)
             )
         """))
 
-        # 6. ตารางอาหาร (Meal_Plans)
+        # 6. ตารางอาหาร (History)
         conn.execute(text("""
-            CREATE TABLE meal_plans (
-                plan_id SERIAL PRIMARY KEY,
+            CREATE TABLE history (
+                history_id SERIAL PRIMARY KEY,
                 user_id INT REFERENCES users(user_id) ON DELETE CASCADE,
                 recipe_id INT REFERENCES recipes(recipe_id) ON DELETE CASCADE,
-                meal_date DATE,
-                meal_type VARCHAR(50)
+                history_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                history_type VARCHAR(100)
             )
         """))
 
