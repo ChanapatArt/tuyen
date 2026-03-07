@@ -1,8 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/screens/recipe_details.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:mobile_app/services/auth_service.dart';
 
-class Search extends StatelessWidget {
+class Search extends StatefulWidget {
   const Search({super.key});
+
+  @override
+  State<Search> createState() => _SearchState();
+}
+
+class _SearchState extends State<Search> {
+  final TextEditingController _searchController = TextEditingController();
+  List<dynamic> _searchResults = [];
+  bool _isLoading = false;
+
+  Future<void> _searchRecipes(String query) async {
+    if (query.isEmpty) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final uri = Uri.parse(
+        '${AuthService.baseUrl}/recipes/search',
+      ).replace(queryParameters: {'q': query, 'limit': '20'});
+
+      final response = await http.get(
+        uri,
+        headers: {'accept': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        setState(() {
+          _searchResults = responseData['data'];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Search Error: $e");
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +69,14 @@ class Search extends StatelessWidget {
 
               // 2. ช่อง Search Bar
               TextField(
+                controller: _searchController,
+                onSubmitted: (value) => _searchRecipes(value),
                 decoration: InputDecoration(
-                  hintText: "Type the name of the menu item or ingredient...",
-                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                  hintText: "Type the name of the menu item...",
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 14,
+                  ),
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: Colors.white,
@@ -53,38 +98,58 @@ class Search extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _buildTag("Minced pork omelet"),
+                  _buildTag("Omelet", () {
+                    _searchController.text = "Omelet";
+                    _searchRecipes("Omelet");
+                  }),
+                  _buildTag("Chicken", () {
+                    _searchController.text = "Chicken";
+                    _searchRecipes("Chicken");
+                  }),
+                  _buildTag("Fried Rice", () {
+                    _searchController.text = "Fried Rice";
+                    _searchRecipes("Fried Rice");
+                  }),
                 ],
               ),
               const SizedBox(height: 24),
 
               // 4. ส่วน Popular menu
               const Text(
-                "Popular menu",
+                "Menu",
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-
-              // 5. รายการเมนูแบบ Grid
-              GridView.builder(
-                shrinkWrap: true, // สำคัญ: เพื่อให้ใช้ใน ScrollView ได้
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, // แบ่ง 2 คอลัมน์
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.85, // ปรับสัดส่วนความสูงของการ์ด
-                ),
-                itemCount: 6, // จำนวนรายการสมมติ
-                itemBuilder: (context, index) {
-                  return _buildPopularCard(
-                    context,
-                    index == 0 ? "Minced pork omelet" : "Chicken Salad",
-                    index == 0 ? "350 kcal" : "250 kcal",
-                    index == 0 ? Colors.green : Colors.grey.shade300,
-                  );
-                },
-              ),
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _searchResults
+                        .isEmpty // ✅ ถ้ายังไม่มีผลลัพธ์การค้นหา
+                  ? _buildInitialView() // ✅ แสดงหน้า "ชวนค้นหา" แทน
+                  :
+                    // 5. รายการเมนูแบบ Grid
+                    GridView.builder(
+                      shrinkWrap: true, // สำคัญ: เพื่อให้ใช้ใน ScrollView ได้
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2, // แบ่ง 2 คอลัมน์
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio:
+                                0.85, // ปรับสัดส่วนความสูงของการ์ด
+                          ),
+                      itemCount: _searchResults.length,
+                      itemBuilder: (context, index) {
+                        final item = _searchResults[index];
+                        return _buildPopularCard(
+                          context,
+                          item['title'] ?? "Unknown",
+                          "${item['calories'] ?? 0} kcal",
+                          Colors.grey.shade200,
+                          item['recipe_id'],
+                        );
+                      },
+                    ),
             ],
           ),
         ),
@@ -93,32 +158,43 @@ class Search extends StatelessWidget {
   }
 
   // ฟังก์ชันสร้าง Tag หมวดหมู่
-  Widget _buildTag(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+  Widget _buildTag(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+        ),
       ),
     );
   }
 
   // ฟังก์ชันสร้างการ์ดเมนูยอดนิยม
-  Widget _buildPopularCard(BuildContext context, String title, String kcal, Color color) {
+  Widget _buildPopularCard(
+    BuildContext context,
+    String title,
+    String kcal,
+    Color color,
+    int recipeId,
+  ) {
     return GestureDetector(
       onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => RecipeDetails(title: title),
-        ),
-      );
-    },
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                RecipeDetails(recipeId: recipeId, title: title),
+          ),
+          // MaterialPageRoute(builder: (context) => RecipeDetails(title: title)),
+        );
+      },
       child: Card(
         color: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -127,9 +203,7 @@ class Search extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ส่วนรูปภาพสมมติ
-            Expanded(
-              child: Container(color: color),
-            ),
+            Expanded(child: Container(color: color)),
             // ส่วนรายละเอียด
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -138,7 +212,10 @@ class Search extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -154,4 +231,32 @@ class Search extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildInitialView() {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.only(top: 50),
+      child: Column(
+        children: [
+          // ใส่ไอคอนน่ารักๆ หรือภาพประกอบ
+          Icon(Icons.restaurant_menu, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            "What do you want to cook today?",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Try searching for menu like 'Omelet' or 'Fried Rice'",
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          ),
+        ],
+      ),
+    ),
+  );
 }

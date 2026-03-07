@@ -58,6 +58,7 @@ class MenuResultsScreen extends StatelessWidget {
                     time: "12:00",
                     matchPercent: "100%",
                     imageColor: Colors.green,
+                    recipeId: 410,
                   ),
                   RecipeCard(
                     title: "Minced pork omelet",
@@ -65,6 +66,7 @@ class MenuResultsScreen extends StatelessWidget {
                     time: "12:00",
                     matchPercent: "100%",
                     imageColor: Colors.grey.shade300,
+                    recipeId: 412,
                   ),
                 ],
               ),
@@ -78,6 +80,7 @@ class MenuResultsScreen extends StatelessWidget {
 
 class RecipeCard extends StatelessWidget {
   final String title, kcal, time, matchPercent;
+  final int recipeId;
   final Color imageColor;
 
   const RecipeCard({
@@ -87,6 +90,7 @@ class RecipeCard extends StatelessWidget {
     required this.time,
     required this.matchPercent,
     required this.imageColor,
+    required this.recipeId
   });
 
   @override
@@ -96,7 +100,8 @@ class RecipeCard extends StatelessWidget {
         Navigator.push(
           context,
 
-          MaterialPageRoute(builder: (context) => RecipeDetails(title: title)),
+          MaterialPageRoute(builder: (context) => RecipeDetails(recipeId: recipeId , title: title)),
+          // MaterialPageRoute(builder: (context) => RecipeDetails(title: title)),
         );
       },
       child: Card(

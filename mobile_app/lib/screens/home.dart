@@ -25,23 +25,71 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          HomeSubNavigator(),
-          Search(),
-          Histories(),
-          ShoppingList(),
-          PersonalInfoPage(),
-        ],
-      ),
+    return PopScope(
+      canPop: false, // ✅ บังคับว่าห้าม "ถอยกลับ" ทันที
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return; // ถ้าหน้าถูกปิดไปแล้วไม่ต้องทำอะไร
 
-      bottomNavigationBar: BottomNav(
-        currentIndex: _selectedIndexPage,
-        onTap: _onItemTapped,
+        // ✅ เรียก Modal ยืนยันการออก
+        final bool shouldPop = await _showExitDialog(context);
+        if (shouldPop && context.mounted) {
+          // ถ้าผู้ใช้กด Exit ให้ปิดแอปหรือถอยกลับจริง
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        body: PageView(
+          controller: _pageController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            HomeSubNavigator(),
+            Search(),
+            Histories(),
+            ShoppingList(),
+            PersonalInfoPage(),
+          ],
+        ),
+
+        bottomNavigationBar: BottomNav(
+          currentIndex: _selectedIndexPage,
+          onTap: _onItemTapped,
+        ),
       ),
     );
   }
+}
+
+Future<bool> _showExitDialog(BuildContext context) async {
+  return await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: const Text(
+            "Exit App",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text("Are you sure you want to exit TuYen?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(false),
+              child: const Text("Cancel", style: TextStyle(color: Colors.black)),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade400,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Exit"),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 }

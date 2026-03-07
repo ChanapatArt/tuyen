@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:mobile_app/services/auth_service.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -8,13 +11,50 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
+  bool _isLoading = true;
+  @override
+  void initState() {
+    super.initState();
+    _fetchAccountData(); // ดึงข้อมูลทันทีเมื่อเข้าหน้า
+  }
+
+  Future<void> _fetchAccountData() async {
+    String? userId = await AuthService.getUserId();
+    if (userId == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('${AuthService.baseUrl}/user/$userId/account'),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['status'] == 'success') {
+          final data = responseData['data'];
+
+          setState(() {
+            // นำข้อมูลจาก API มาใส่ใน Controller
+            _emailController.text = data['email'] ?? "";
+            _nameController.text = data['display_name'] ?? "";
+            _targetController.text = (data['target_cal'] ?? 2000)
+                .toString();
+            // รหัสผ่านมักไม่ส่งกลับมาเพื่อความปลอดภัย หรือส่งมาเป็นค่าว่าง
+            _passwordController.text = "********";
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching account: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
   // Controller สำหรับรับค่าจากช่องกรอกข้อมูล
   final TextEditingController _emailController = TextEditingController(
-    text: "chef@smartfridge.app",
+    text: "",
   );
-  final TextEditingController _nameController = TextEditingController(
-    text: "Chef Scientist",
-  );
+  final TextEditingController _nameController = TextEditingController(text: "");
   final TextEditingController _passwordController = TextEditingController(
     text: "********",
   );
@@ -46,45 +86,52 @@ class _AccountPageState extends State<AccountPage> {
 
             // 1. Profile Picture Section
             Center(
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.grey.shade200,
-                    child: const Text(
-                      "C",
-                      style: TextStyle(fontSize: 40, color: Colors.black),
+              child: _isLoading
+                  ? const CircularProgressIndicator() // แสดงตัวโหลดขณะรอข้อมูล
+                  : Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.grey.shade200,
+                          child: Text(
+                            _nameController.text.isNotEmpty
+                                ? _nameController.text[0].toUpperCase()
+                                : "U",
+                            style: TextStyle(fontSize: 40, color: Colors.black),
+                          ),
+                        ),
+                        const SizedBox(height: 15),
+                        Text(
+                          _nameController.text,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          _emailController.text,
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 20,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            "Edit Profile",
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 15),
-                  const Text(
-                    "Chef Scientist",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "chef@smartfridge.app",
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 20,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      "Edit Profile",
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ),
 
             const SizedBox(height: 20),
@@ -120,11 +167,37 @@ class _AccountPageState extends State<AccountPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // Logic สำหรับบันทึกข้อมูล
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Saved Successfully!")),
-                  );
+                onPressed: () async {
+                  String? userId = await AuthService.getUserId();
+                  try {
+                    final response = await http.put(
+                      // หรือตามที่ API คุณกำหนด
+                      Uri.parse(
+                        '${AuthService.baseUrl}/user/$userId/edit',
+                      ),
+                      headers: {'Content-Type': 'application/json'},
+                      body: jsonEncode({
+                        "display_name": _nameController.text,
+                        "email": _emailController.text,
+                        // "password":
+                        //     _passwordController.text, // ถ้ามีการกรอกใหม่
+                        "calorie_target":
+                            int.tryParse(_targetController.text) ?? 2000,
+                      }),
+                    );
+
+                    if (response.statusCode == 200) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Account Updated Successfully!"),
+                        ),
+                      );
+                    }
+                  _fetchAccountData();
+                  } catch (e) {
+                    print("Update Error: $e");
+                  }
+
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF28B446), // สีเขียวตามธีม

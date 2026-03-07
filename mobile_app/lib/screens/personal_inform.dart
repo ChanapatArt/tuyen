@@ -56,7 +56,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   final TextEditingController _inputController = TextEditingController();
 
   // --- ฟังก์ชันแสดง Dialog แบบ Custom ---
-  void _showCustomDialog(String title, List<String> targetList) {
+  void _showCustomDialog(
+    String title,
+    List<String> targetList, {
+    bool isAllergy = true,
+  }) {
     _inputController.clear();
     showDialog(
       context: context,
@@ -83,7 +87,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                 TextField(
                   controller: _inputController,
                   decoration: InputDecoration(
-                    hintText: "Seafood",
+                    hintText: isAllergy ? "Seafood" : "Vegan",
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -95,13 +99,37 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
+                          FocusScope.of(context).unfocus();
                           if (_inputController.text.isNotEmpty) {
-                            setState(() {
-                              // ✅ เพิ่มข้อมูลลง List และหน้าจอจะอัปเดตทันที
-                              targetList.add(_inputController.text);
-                            });
-                            Navigator.pop(context);
+                            String? userId = await AuthService.getUserId();
+                            if (userId == null) return;
+
+                            // ✅ 2. แยก Endpoint ตามค่า isAllergy
+                            String subPath = isAllergy ? "allergies/add" : "diet-type/add";
+                            String bodyKey = isAllergy ? "allergy_name" : "diet_name";
+
+                            try {
+                              final response = await http.post(
+                                Uri.parse(
+                                  '${AuthService.baseUrl}/user/$userId/$subPath',
+                                ),
+                                headers: {'Content-Type': 'application/json'},
+                                body: jsonEncode({
+                                  bodyKey: _inputController
+                                      .text, // ส่ง Key ให้ตรงตาม Schema
+                                }),
+                              );
+
+                              if (response.statusCode == 200) {
+                                setState(() {
+                                  targetList.add(_inputController.text);
+                                });
+                                if (context.mounted) Navigator.pop(context);
+                              }
+                            } catch (e) {
+                              print("Error: $e");
+                            }
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -152,108 +180,113 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              _buildHeader(),
-              const SizedBox(height: 20),
-              _buildCalorieCard(), // ใช้ตัวเดิมที่คุณชอบ
-              const SizedBox(height: 25),
+      body: RefreshIndicator(
+        onRefresh: _fetchUserProfile,
+        color: Colors.green,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+                _buildHeader(),
+                const SizedBox(height: 20),
+                _buildCalorieCard(), // ใช้ตัวเดิมที่คุณชอบ
+                const SizedBox(height: 25),
 
-              // 2. แสดงรายการ Food Allergies ตามจำนวนจริง
-              _buildSectionHeader(
-                "Food allergies",
-                () => _showCustomDialog("Food allergies", foodAllergies),
-              ),
-              const SizedBox(height: 10),
-              ...foodAllergies.map(
-                (item) => Dismissible(
-                  key: UniqueKey(),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    margin: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
+                // 2. แสดงรายการ Food Allergies ตามจำนวนจริง
+                _buildSectionHeader(
+                  "Food allergies",
+                  () => _showCustomDialog("Food allergies", foodAllergies, isAllergy: true),
+                ),
+                const SizedBox(height: 10),
+                ...foodAllergies.map(
+                  (item) => Dismissible(
+                    key: UniqueKey(),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      child: const Icon(Icons.delete, color: Colors.white),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
+
+                    // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
+                    onDismissed: (direction) {
+                      setState(() {
+                        foodAllergies.remove(item); // ลบข้อมูลออกจาก List
+                      });
+
+                      // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text("$item removed")));
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _buildInfoTile(item),
                     ),
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-
-                  // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
-                  onDismissed: (direction) {
-                    setState(() {
-                      foodAllergies.remove(item); // ลบข้อมูลออกจาก List
-                    });
-
-                    // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text("$item removed")));
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _buildInfoTile(item),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 15),
+                const SizedBox(height: 15),
 
-              // 3. แสดงรายการ Diet type ตามจำนวนจริง
-              _buildSectionHeader(
-                "Diet type",
-                () => _showCustomDialog("Diet type", dietTypes),
-              ),
-              const SizedBox(height: 10),
-              ...dietTypes.map(
-                (item) => Dismissible(
-                  key: UniqueKey(),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    margin: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
+                // 3. แสดงรายการ Diet type ตามจำนวนจริง
+                _buildSectionHeader(
+                  "Diet type",
+                  () => _showCustomDialog("Diet type", dietTypes, isAllergy: false),
+                ),
+                const SizedBox(height: 10),
+                ...dietTypes.map(
+                  (item) => Dismissible(
+                    key: UniqueKey(),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      child: const Icon(Icons.delete, color: Colors.white),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
+
+                    // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
+                    onDismissed: (direction) {
+                      setState(() {
+                        dietTypes.remove(item); // ลบข้อมูลออกจาก List
+                      });
+
+                      // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text("$item removed")));
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _buildInfoTile(item),
                     ),
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-
-                  // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
-                  onDismissed: (direction) {
-                    setState(() {
-                      dietTypes.remove(item); // ลบข้อมูลออกจาก List
-                    });
-
-                    // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text("$item removed")));
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _buildInfoTile(item),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 30),
-              _buildSignOutButton(),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 30),
+                _buildSignOutButton(),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),

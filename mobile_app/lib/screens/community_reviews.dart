@@ -1,7 +1,48 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:mobile_app/services/auth_service.dart';
 
-class CommunityReviews extends StatelessWidget {
-  const CommunityReviews({super.key});
+class CommunityReviews extends StatefulWidget {
+  final int recipeId; // ✅ รับ recipeId มาจากหน้า RecipeDetails
+  const CommunityReviews({super.key, required this.recipeId});
+
+  @override
+  State<CommunityReviews> createState() => _CommunityReviewsState();
+}
+
+class _CommunityReviewsState extends State<CommunityReviews> {
+  List<dynamic> _reviews = [];
+  bool _isLoading = true;
+  final TextEditingController _commentController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReviews();
+  }
+
+  // ✅ ฟังก์ชันดึงข้อมูลรีวิวจาก API
+  Future<void> _fetchReviews() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AuthService.baseUrl}/recipes/${widget.recipeId}/reviews'),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['status'] == 'success') {
+          setState(() {
+            _reviews = responseData['data'];
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching reviews: $e");
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,64 +51,41 @@ class CommunityReviews extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 16, top: 16, right: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      margin: EdgeInsets.only(right: 8, top: 6.5),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: const Icon(Icons.arrow_back, size: 20),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      "Community reviews",
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // 1. รายการรีวิว (ใช้ Expanded เพื่อให้กินพื้นที่ที่เหลือ)
+            // ส่วน Header
+            _buildHeader(context),
+
+            // 1. รายการรีวิวจริงจากฐานข้อมูล
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildReviewCard(
-                    userName: "User_99",
-                    time: "2 hours ago",
-                    comment:
-                        "This recipe is so easy, even dorm students can make it!",
-                    initial: "U",
-                    rating: 4,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildReviewCard(
-                    userName: "HealtyGuy",
-                    time: "1 day ago",
-                    comment:
-                        "Reduce the oil a bit; it'll be delicious and healthier.",
-                    initial: "H",
-                    rating: 5,
-                  ),
-                ],
-              ),
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF00C853),
+                      ),
+                    )
+                  : _reviews.isEmpty
+                  ? const Center(child: Text("No reviews yet. be the first!"))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _reviews.length,
+                      itemBuilder: (context, index) {
+                        final review = _reviews[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _buildReviewCard(
+                            userName:
+                                review['reviewer_name'] ?? "Anonymous", // ✅
+                            time: review['created_at'] ?? "", // ✅
+                            comment: review['comment'] ?? "", // ✅
+                            rating: review['rating'] ?? 5, // ✅
+                            initial: (review['reviewer_name'] ?? "A")[0]
+                                .toUpperCase(),
+                          ),
+                        );
+                      },
+                    ),
             ),
-        
-            // 2. ส่วนพิมพ์รีวิว (ติดอยู่ด้านล่าง)
+
+            // 2. ส่วนพิมพ์รีวิวด้านล่าง
             Padding(
               padding: const EdgeInsets.all(16),
               child: _buildReviewInput(),
@@ -78,7 +96,34 @@ class CommunityReviews extends StatelessWidget {
     );
   }
 
-  // ฟังก์ชันสร้างการ์ดรีวิวแต่ละอัน
+  // Helper: Header
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, top: 16, right: 16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: const Icon(Icons.arrow_back, size: 20),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            "Community reviews",
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper: การ์ดรีวิว (ปรับให้แสดงดาวตามค่าจริง)
   Widget _buildReviewCard({
     required String userName,
     required String time,
@@ -92,20 +137,12 @@ class CommunityReviews extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // วงกลมชื่อย่อ
               CircleAvatar(
                 backgroundColor: const Color(0xFF00C853),
                 radius: 18,
@@ -118,7 +155,6 @@ class CommunityReviews extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // ชื่อและเวลา
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,69 +170,98 @@ class CommunityReviews extends StatelessWidget {
                   ],
                 ),
               ),
-              // ดาว Rating
               Row(
                 children: List.generate(
-                  rating,
-                  (index) =>
-                      const Icon(Icons.star, color: Colors.orange, size: 16),
+                  5,
+                  (index) => Icon(
+                    Icons.star,
+                    color: index < rating
+                        ? Colors.orange
+                        : Colors.grey.shade300, // ✅ แสดงดาวตามคะแนน
+                    size: 16,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          // ข้อความรีวิว
           Text(comment, style: const TextStyle(fontSize: 14, height: 1.4)),
         ],
       ),
     );
   }
 
-  // ฟังก์ชันสร้างช่องพิมพ์ด้านล่าง
+  Future<void> _submitReview() async {
+    if (_commentController.text.isEmpty) return;
+
+    String? userId =
+        await AuthService.getUserId(); // ดึง ID ผู้ใช้ที่ Login อยู่
+    if (userId == null) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('${AuthService.baseUrl}/review/add'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "user_id": int.parse(userId), // ✅ ตาม Schema
+          "recipe_id": widget.recipeId, // ✅ ตาม Schema
+          "rating":
+              5, // ตัวอย่าง: ตั้งไว้ 5 ดาว (หรือสุรเดชจะทำตัวเลือกดาวเพิ่มก็ได้ครับ)
+          "comment": _commentController.text, // ✅ ตาม Schema
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        _commentController.clear();
+        _fetchReviews();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Review submitted!")));
+        }
+      }
+    } catch (e) {
+      print("Submit Error: $e");
+    }
+  }
+
+  // ✅ 2. ปรับปรุงปุ่มส่งใน Widget
   Widget _buildReviewInput() {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(18)
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "Write your review...",
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _commentController,
+            decoration: InputDecoration(
+              hintText: "Write your review...",
+              filled: true,
+              fillColor: Colors.grey.shade50,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          // ปุ่มส่ง (สีดำ)
-          Container(
+        ),
+        const SizedBox(width: 12),
+        // ✅ เปลี่ยนปุ่มส่งให้เรียกใช้ _submitReview
+        GestureDetector(
+          onTap: _submitReview, // ✨ เรียกฟังก์ชันส่งข้อมูล
+          child: Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(
               color: Colors.black,
-              borderRadius: BorderRadius.all(Radius.circular(12))
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
             child: const Icon(Icons.send, color: Colors.white, size: 20),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -13,11 +13,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        textTheme: GoogleFonts.itimTextTheme(),
-      ),
-
       title: "TuYen",
+      theme: ThemeData(
+        useMaterial3: true,
+        textTheme: GoogleFonts.itimTextTheme(),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          primary: Colors.green,
+        ),
+      ),
       home: const Splash(),
     );
   }
