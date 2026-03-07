@@ -759,6 +759,6 @@ def get_account_management(user_id: int):
                 "email": result[0],
                 "display_name": result[1],
                 "target_cal": result[2] if result[2] else "", # ถ้ายังไม่เคยตั้งเป้าหมาย จะส่งเป็นค่าว่างไปให้พิมพ์
-                "password": "" # ส่งค่าว่างไปให้ Mobile App โชว์ ******** แทน
+                "password": "" # ส่งค่าว่างไปให้ Mobile App โชว์ ********  แทน
             }
         }
