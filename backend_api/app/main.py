@@ -285,20 +285,23 @@ def get_fridge_items(user_id: int):
             })
             
         return {"status": "success", "total": len(fridge_list), "data": fridge_list}
+# ==========================================
+# ❄️ 5. API จัดการของในตู้เย็น (Fridge) [อัปเดตคืนค่า Ingredient ID]
+# ==========================================
 @app.post("/fridge/add")
 def add_fridge_item(item: FridgeItemAddSchema):
     with engine.connect() as conn:
-        # 1. เช็คว่ามีวัตถุดิบนี้ในตาราง ingredients หรือยัง (ถ้ายังให้เพิ่มใหม่)
-        ing_result = conn.execute(text("SELECT ingredient_id FROM ingredients WHERE name = :n"), {"n": item.ingredient_name}).fetchone()
+        # 1. เช็คว่ามีวัตถุดิบนี้ในตาราง ingredients หรือยัง
+        ing_result = conn.execute(text("SELECT ingredient_id FROM ingredients WHERE name ILIKE :n"), {"n": item.ingredient_name}).fetchone()
         
         if ing_result:
             ing_id = ing_result[0]
         else:
-            # ถ้ายังไม่มี ให้ Insert แล้วดึง ID กลับมา (ใช้ RETURNING)
+            # ถ้ายังไม่มี ให้ Insert แล้วดึง ingredient_id กลับมา
             new_ing = conn.execute(text("INSERT INTO ingredients (name) VALUES (:n) RETURNING ingredient_id"), {"n": item.ingredient_name}).fetchone()
             ing_id = new_ing[0]
 
-        # 2. เพิ่มเข้าตู้เย็น
+        # 2. เพิ่มเข้าตู้เย็น (ไม่ต้องใช้ RETURNING แล้ว เพราะเรามี ID ที่ต้องการแล้ว)
         conn.execute(
             text("""
                 INSERT INTO fridge_items (user_id, ingredient_id, quantity, unit, expiry_date) 
@@ -306,8 +309,13 @@ def add_fridge_item(item: FridgeItemAddSchema):
             """), 
             {"u": item.user_id, "i": ing_id, "q": item.quantity, "un": item.unit, "e": item.expiry_date}
         )
+        
         conn.commit()
-        return {"status": "success", "message": f"เพิ่ม {item.ingredient_name} เข้าตู้เย็นแล้ว!"}
+        return {
+            "status": "success", 
+            "message": f"เพิ่ม {item.ingredient_name} เข้าตู้เย็นแล้ว!",
+            "ingredient_id": ing_id   # <--- ส่ง ingredient_id กลับไปให้ Mobile App ตามรีเควสครับ!
+        }
 
 @app.delete("/fridge/remove/{fridge_id}")
 def remove_fridge_item(fridge_id: int):
@@ -563,16 +571,73 @@ def get_recipe_details(recipe_id: int):
                 "steps": steps                  # How to do it (วิธีทำ)
             }
         }
+@app.get("/recipesbyname/{recipe_name}/details")
+def get_recipe_details_by_name(recipe_name: str):
+    """
+    ดึงข้อมูลรายละเอียดสูตรอาหาร (แคลอรี, เวลาทำ, วัตถุดิบ, วิธีทำ) โดยใช้ ชื่อเมนู
+    """
+    with engine.connect() as conn:
+        # ใช้ ILIKE เพื่อค้นหาจากชื่อแบบไม่สนตัวพิมพ์เล็กใหญ่
+        recipe = conn.execute(
+            text("""
+                SELECT recipe_id, title, calories, prep_time, description, image_url 
+                FROM recipes 
+                WHERE title ILIKE :r
+                LIMIT 1
+            """), 
+            {"r": f"%{recipe_name.strip()}%"}
+        ).fetchone()
+        
+        if not recipe:
+            return {"status": "error", "message": "ไม่พบข้อมูลสูตรอาหารนี้ในฐานข้อมูล"}
+            
+        recipe_id = recipe[0]
+        title = recipe[1]
+        calories = recipe[2]
+        prep_time = recipe[3]
+        description = recipe[4]
+        
+        # แปลงข้อความวิธีทำเป็น List
+        import ast
+        steps = []
+        if description:
+            try:
+                steps = ast.literal_eval(description)
+            except:
+                steps = [description]
+                
+        # ดึง Ingredients จาก AI Dataset กลับมา
+        recipe_ingredients = []
+        try:
+            ai_row = df_api[df_api['name'].str.lower() == title.lower()]
+            if not ai_row.empty:
+                recipe_ingredients = ai_row.iloc[0]['ingredients']
+                if isinstance(recipe_ingredients, str):
+                    recipe_ingredients = ast.literal_eval(recipe_ingredients)
+        except:
+            pass
+
+        return {
+            "status": "success",
+            "data": {
+                "recipe_id": recipe_id,         # ส่ง ID กลับไปให้แอปใช้ทำ History หรือ Review ต่อได้
+                "title": title,                 
+                "calories": calories,           
+                "prep_time": prep_time,         
+                "ingredients": recipe_ingredients, 
+                "steps": steps                  
+            }
+        }
 # ==========================================
 # 🛒 API สำหรับหน้า Shopping List (Cart)
 # ==========================================
 @app.post("/shopping-list/add")
 def add_shopping_list_item(item: ShoppingListAddSchema):
     """
-    เพิ่มรายการวัตถุดิบลงใน Shopping List (หน้า Cart)
+    เพิ่มรายการวัตถุดิบลงใน Shopping List (หน้า Cart) และส่ง list_id กลับไป
     """
     with engine.connect() as conn:
-        # 1. เช็คว่ามีวัตถุดิบนี้ในตาราง ingredients หรือยัง (ค้นหาแบบไม่สนพิมพ์เล็ก/ใหญ่)
+        # 1. เช็คว่ามีวัตถุดิบนี้ในตาราง ingredients หรือยัง
         ing_result = conn.execute(
             text("SELECT ingredient_id FROM ingredients WHERE name ILIKE :n"), 
             {"n": item.ingredient_name}
@@ -588,11 +653,12 @@ def add_shopping_list_item(item: ShoppingListAddSchema):
             ).fetchone()
             ing_id = new_ing[0]
 
-        # 2. เพิ่มลงตาราง shopping_lists
-        conn.execute(
+        # 2. เพิ่มลงตาราง shopping_lists และใช้ RETURNING เพื่อดึง id ที่เพิ่งสร้าง
+        result = conn.execute(
             text("""
                 INSERT INTO shopping_lists (user_id, ingredient_id, quantity, unit) 
                 VALUES (:u, :i, :q, :un)
+                RETURNING list_id
             """), 
             {
                 "u": item.user_id, 
@@ -600,9 +666,17 @@ def add_shopping_list_item(item: ShoppingListAddSchema):
                 "q": item.quantity, 
                 "un": item.unit
             }
-        )
+        ).fetchone() # ดึงผลลัพธ์จาก RETURNING
+        
+        new_list_id = result[0]
         conn.commit()
-        return {"status": "success", "message": f"เพิ่ม {item.ingredient_name} ลงในตะกร้าแล้ว!"}
+        
+        # ส่งค่า list_id กลับไปให้ Flutter
+        return {
+            "status": "success", 
+            "message": f"เพิ่ม {item.ingredient_name} ลงในตะกร้าแล้ว!",
+            "list_id": new_list_id 
+        }
 
 @app.get("/shopping-list/{user_id}")
 def get_shopping_list(user_id: int):
@@ -698,6 +772,41 @@ def add_user_allergy(user_id: int, payload: AllergyAddSchema):
         )
         conn.commit()
         return {"status": "success", "message": "เพิ่มประวัติแพ้อาหารเรียบร้อย", "updated_allergies": new_allergies}
+# ==========================================
+# ❌ API สำหรับลบ Allergies และ Diet Type
+# ==========================================
+@app.delete("/user/{user_id}/allergies/remove")
+def remove_user_allergy(user_id: int, allergy_name: str):
+    """ลบรายการแพ้อาหาร 1 รายการ (ส่งชื่อที่ต้องการลบมาทาง Query Parameter)"""
+    with engine.connect() as conn:
+        curr = conn.execute(text("SELECT allergies FROM users WHERE user_id = :u"), {"u": user_id}).fetchone()
+        if curr and curr[0]:
+            # เอาข้อความมาแยกเป็น List แล้วตัดคำที่ตรงกับ allergy_name ทิ้ง (ไม่สนพิมพ์เล็กใหญ่)
+            allergies_list = [a.strip() for a in curr[0].split(",") if a.strip()]
+            allergies_list = [a for a in allergies_list if a.lower() != allergy_name.lower()]
+            new_allergies = ", ".join(allergies_list)
+            
+            conn.execute(text("UPDATE users SET allergies = :a WHERE user_id = :u"), {"a": new_allergies, "u": user_id})
+            conn.commit()
+            return {"status": "success", "message": "ลบประวัติแพ้อาหารเรียบร้อย", "updated_allergies": new_allergies}
+            
+        return {"status": "error", "message": "ไม่พบข้อมูลแพ้อาหารเดิม"}
+
+@app.delete("/user/{user_id}/diet-type/remove")
+def remove_user_diet(user_id: int, diet_name: str):
+    """ลบรูปแบบการกิน 1 รายการ (ส่งชื่อที่ต้องการลบมาทาง Query Parameter)"""
+    with engine.connect() as conn:
+        curr = conn.execute(text("SELECT diet_type FROM users WHERE user_id = :u"), {"u": user_id}).fetchone()
+        if curr and curr[0]:
+            diet_list = [d.strip() for d in curr[0].split(",") if d.strip()]
+            diet_list = [d for d in diet_list if d.lower() != diet_name.lower()]
+            new_diet = ", ".join(diet_list)
+            
+            conn.execute(text("UPDATE users SET diet_type = :d WHERE user_id = :u"), {"d": new_diet, "u": user_id})
+            conn.commit()
+            return {"status": "success", "message": "ลบรูปแบบการกินเรียบร้อย", "updated_diet_types": new_diet}
+            
+        return {"status": "error", "message": "ไม่พบข้อมูลรูปแบบการกินเดิม"}
 
 # 3. API เพิ่มรูปแบบการกิน (Diet Type)
 @app.post("/user/{user_id}/diet-type/add")
