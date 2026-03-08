@@ -288,6 +288,9 @@ def get_fridge_items(user_id: int):
 # ==========================================
 # ❄️ 5. API จัดการของในตู้เย็น (Fridge) [อัปเดตคืนค่า Ingredient ID]
 # ==========================================
+# ==========================================
+# ❄️ 5. API จัดการของในตู้เย็น (Fridge) [อัปเดตคืนค่า ID]
+# ==========================================
 @app.post("/fridge/add")
 def add_fridge_item(item: FridgeItemAddSchema):
     with engine.connect() as conn:
@@ -297,24 +300,23 @@ def add_fridge_item(item: FridgeItemAddSchema):
         if ing_result:
             ing_id = ing_result[0]
         else:
-            # ถ้ายังไม่มี ให้ Insert แล้วดึง ingredient_id กลับมา
             new_ing = conn.execute(text("INSERT INTO ingredients (name) VALUES (:n) RETURNING ingredient_id"), {"n": item.ingredient_name}).fetchone()
             ing_id = new_ing[0]
 
-        # 2. เพิ่มเข้าตู้เย็น (ไม่ต้องใช้ RETURNING แล้ว เพราะเรามี ID ที่ต้องการแล้ว)
-        conn.execute(
+        # 2. เพิ่มเข้าตู้เย็น พร้อมขอ ID ที่เพิ่งสร้างกลับมา (RETURNING)
+        result = conn.execute(
             text("""
                 INSERT INTO fridge_items (user_id, ingredient_id, quantity, unit, expiry_date) 
-                VALUES (:u, :i, :q, :un, :e)
+                VALUES (:u, :i, :q, :un, :e) RETURNING fridge_id
             """), 
             {"u": item.user_id, "i": ing_id, "q": item.quantity, "un": item.unit, "e": item.expiry_date}
-        )
+        ).fetchone()
         
         conn.commit()
         return {
             "status": "success", 
             "message": f"เพิ่ม {item.ingredient_name} เข้าตู้เย็นแล้ว!",
-            "ingredient_id": ing_id   # <--- ส่ง ingredient_id กลับไปให้ Mobile App ตามรีเควสครับ!
+            "fridge_id": result[0]   # <--- ส่ง ID กลับไปให้ Mobile App
         }
 
 @app.delete("/fridge/remove/{fridge_id}")
