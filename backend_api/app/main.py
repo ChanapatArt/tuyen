@@ -97,7 +97,9 @@ class UserEditProfileSchema(BaseModel):
     display_name: Optional[str] = None
     password: Optional[str] = None
     target_cal: Optional[int] = None
-
+class FavoriteAddSchema(BaseModel):
+    user_id: int
+    recipe_id: int
 
 # 3. Helper Functions (ฟังก์ชันช่วยประมวลผล)
 def tokenize_ingredients(ingredient_list):
@@ -607,7 +609,7 @@ def get_recipe_details_by_name(recipe_name: str):
         calories = recipe[2]
         prep_time = recipe[3]
         description = recipe[4]
-        
+        image_url = recipe[5]
         # แปลงข้อความวิธีทำเป็น List
         import ast
         steps = []
@@ -634,7 +636,8 @@ def get_recipe_details_by_name(recipe_name: str):
                 "recipe_id": recipe_id,         # ส่ง ID กลับไปให้แอปใช้ทำ History หรือ Review ต่อได้
                 "title": title,                 
                 "calories": calories,           
-                "prep_time": prep_time,         
+                "prep_time": prep_time,
+                "image_url": image_url,   
                 "ingredients": recipe_ingredients, 
                 "steps": steps                  
             }
@@ -952,3 +955,76 @@ def get_account_management(user_id: int):
                 "password": "" # ส่งค่าว่างไปให้ Mobile App โชว์ ********  แทน
             }
         }
+#4.30 favorite.add Add Favorite
+@app.post("/favorite/add")
+def add_favorite(fav: FavoriteAddSchema):
+    """
+    กดหัวใจ: เพิ่มสูตรอาหารเข้าลิสต์เมนูโปรด
+    """
+    with engine.connect() as conn:
+        # เช็คก่อนว่าเคยกดหัวใจเมนูนี้ไปหรือยัง (ป้องกันข้อมูลซ้ำ)
+        check_exist = conn.execute(
+            text("SELECT favorite_id FROM favorites WHERE user_id = :u AND recipe_id = :r"),
+            {"u": fav.user_id, "r": fav.recipe_id}
+        ).fetchone()
+        
+        if check_exist:
+            return {"status": "success", "message": "เมนูนี้อยู่ในรายการโปรดอยู่แล้ว"}
+            
+        # ถ้ายังไม่มี ให้บันทึกลงฐานข้อมูล
+        conn.execute(
+            text("""
+                INSERT INTO favorites (user_id, recipe_id) 
+                VALUES (:u, :r)
+            """), 
+            {"u": fav.user_id, "r": fav.recipe_id}
+        )
+        conn.commit()
+        return {"status": "success", "message": "เพิ่มลงในเมนูโปรดแล้ว!"}
+    
+#4.31 favorite/user_id Get User Favorites
+# 2. API ดูเมนูโปรดทั้งหมดของผู้ใช้ (GET)
+@app.get("/favorites/{user_id}")
+def get_user_favorites(user_id: int):
+    """
+    ดึงรายการเมนูโปรดทั้งหมดของผู้ใช้ เพื่อไปโชว์ในหน้า Favorites
+    """
+    with engine.connect() as conn:
+        # จอยตาราง recipes เพื่อดึง ชื่อเมนู (title) และ แคลอรี (calories) ไปแสดงบนการ์ด
+        result = conn.execute(
+            text("""
+                SELECT f.favorite_id, f.recipe_id, r.title, r.calories, r.image_url
+                FROM favorites f
+                JOIN recipes r ON f.recipe_id = r.recipe_id
+                WHERE f.user_id = :u
+                ORDER BY f.favorite_id DESC
+            """),
+            {"u": user_id}
+        ).fetchall()
+        
+        fav_list = []
+        for row in result:
+            fav_list.append({
+                "favorite_id": row[0],
+                "recipe_id": row[1],
+                "title": row[2],
+                "calories": row[3],
+                "image_url": row[4]
+            })
+            
+        return {"status": "success", "total": len(fav_list), "data": fav_list}
+
+#4.31 favorite/remove/user_id/recipe_id Remove Favorite
+# 3. API ลบเมนูโปรด (DELETE)
+@app.delete("/favorite/remove/{user_id}/{recipe_id}")
+def remove_favorite(user_id: int, recipe_id: int):
+    """
+    กดยกเลิกหัวใจ: เอาสูตรอาหารออกจากลิสต์เมนูโปรด
+    """
+    with engine.connect() as conn:
+        conn.execute(
+            text("DELETE FROM favorites WHERE user_id = :u AND recipe_id = :r"),
+            {"u": user_id, "r": recipe_id}
+        )
+        conn.commit()
+        return {"status": "success", "message": "นำออกจากเมนูโปรดแล้ว!"}
