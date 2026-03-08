@@ -78,6 +78,7 @@ class ReviewAddSchema(BaseModel):
     recipe_id: int
     rating: int # 1 ถึง 5
     comment: Optional[str] = None
+    created_at: Optional[datetime] = None  # <--- เพิ่มฟิลด์วันที่ตรงนี้ (เป็น Optional)
 class ShoppingListAddSchema(BaseModel):
     user_id: int
     ingredient_name: str
@@ -90,6 +91,12 @@ class DietTypeAddSchema(BaseModel):
     diet_name: str
 class ForgotPasswordSchema(BaseModel):
     email: str
+
+class UserEditProfileSchema(BaseModel):
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    password: Optional[str] = None
+    target_cal: Optional[int] = None
 
 
 # 3. Helper Functions (ฟังก์ชันช่วยประมวลผล)
@@ -380,13 +387,22 @@ def add_review(review: ReviewAddSchema):
     if review.rating < 1 or review.rating > 5:
         return {"status": "error", "message": "คะแนนต้องอยู่ระหว่าง 1 ถึง 5 เท่านั้น"}
         
+    # เช็คว่าถ้าไม่ได้ส่งวันที่มา ให้ใช้วันที่และเวลาปัจจุบันของเซิร์ฟเวอร์
+    review_date = review.created_at if review.created_at else datetime.now()
+        
     with engine.connect() as conn:
         conn.execute(
             text("""
-                INSERT INTO reviews (user_id, recipe_id, rating, comment) 
-                VALUES (:u, :r, :rt, :c)
+                INSERT INTO reviews (user_id, recipe_id, rating, comment, created_at) 
+                VALUES (:u, :r, :rt, :c, :d)
             """), 
-            {"u": review.user_id, "r": review.recipe_id, "rt": review.rating, "c": review.comment}
+            {
+                "u": review.user_id, 
+                "r": review.recipe_id, 
+                "rt": review.rating, 
+                "c": review.comment,
+                "d": review_date  # <--- ส่งวันที่เข้าไปบันทึกลงฐานข้อมูล
+            }
         )
         conn.commit()
         return {"status": "success", "message": "ขอบคุณสำหรับรีวิวครับ!"}
@@ -464,7 +480,7 @@ def search_recipes(q: str, limit: int = 20):
             
         return {"status": "success", "total": len(recipes_list), "data": recipes_list}
 
-#4.17 recipes/recipe_id/reviews Get Recipe Reviews
+#4.17 history/user_id/by-date Get History by Date
 @app.get("/history/{user_id}/by-date")
 def get_history_by_date(user_id: int, target_date: date):
     """
@@ -504,7 +520,7 @@ def get_history_by_date(user_id: int, target_date: date):
             "total": len(history_list), 
             "data": history_list
         }
-#4.18
+#4.18 recipes/recipe_id/details Get Recipe Details
 # ==========================================
 # 📖 API สำหรับหน้า รายละเอียดเมนู (Recipe Details)
 # ==========================================
@@ -565,6 +581,7 @@ def get_recipe_details(recipe_id: int):
                 "steps": steps                  # How to do it (วิธีทำ)
             }
         }
+#4.19 recipesbyname/recipe_name/details Get Recipe Details By Name
 @app.get("/recipesbyname/{recipe_name}/details")
 def get_recipe_details_by_name(recipe_name: str):
     """
@@ -622,9 +639,7 @@ def get_recipe_details_by_name(recipe_name: str):
                 "steps": steps                  
             }
         }
-# ==========================================
-# 🛒 API สำหรับหน้า Shopping List (Cart)
-# ==========================================
+#4.20 shopping-list/add Add Shopping List Item
 @app.post("/shopping-list/add")
 def add_shopping_list_item(item: ShoppingListAddSchema):
     """
@@ -672,6 +687,7 @@ def add_shopping_list_item(item: ShoppingListAddSchema):
             "list_id": new_list_id 
         }
 
+#4.21 shopping-list/user_id Get Shopping List
 @app.get("/shopping-list/{user_id}")
 def get_shopping_list(user_id: int):
     """
@@ -701,6 +717,7 @@ def get_shopping_list(user_id: int):
             
         return {"status": "success", "total": len(shopping_list), "data": shopping_list}
 
+#4.22 shopping-list/remove/list_id Remove Shoping List Item
 @app.delete("/shopping-list/remove/{list_id}")
 def remove_shopping_list_item(list_id: int):
     """
@@ -710,11 +727,9 @@ def remove_shopping_list_item(list_id: int):
         conn.execute(text("DELETE FROM shopping_lists WHERE list_id = :l"), {"l": list_id})
         conn.commit()
         return {"status": "success", "message": "ลบรายการเรียบร้อยแล้ว!"}
-# ==========================================
-# ⚙️ API สำหรับหน้า Personal Information
-# ==========================================
 
-# 1. API ดึงข้อมูลโปรไฟล์ไปแสดงผล
+#4.23 user/user_id/profile Get User Profile
+# API ดึงข้อมูลโปรไฟล์ไปแสดงผล
 @app.get("/user/{user_id}/profile")
 def get_user_profile(user_id: int):
     """
@@ -760,8 +775,8 @@ def get_user_profile(user_id: int):
                 "diet_types": diet_list
             }
         }
-
-# 2. API เพิ่มรายการแพ้อาหาร (Food Allergies)
+#4.24 user/user_id/allergies/add Add User Allergy
+# API เพิ่มรายการแพ้อาหาร (Food Allergies)
 @app.post("/user/{user_id}/allergies/add")
 def add_user_allergy(user_id: int, payload: AllergyAddSchema):
     with engine.connect() as conn:
@@ -785,9 +800,8 @@ def add_user_allergy(user_id: int, payload: AllergyAddSchema):
         )
         conn.commit()
         return {"status": "success", "message": "เพิ่มประวัติแพ้อาหารเรียบร้อย", "updated_allergies": new_allergies}
-# ==========================================
-# ❌ API สำหรับลบ Allergies และ Diet Type
-# ==========================================
+
+#4.25 user/user_id/allergies/remove remove User Allergy
 @app.delete("/user/{user_id}/allergies/remove")
 def remove_user_allergy(user_id: int, allergy_name: str):
     """ลบรายการแพ้อาหาร 1 รายการ (ส่งชื่อที่ต้องการลบมาทาง Query Parameter)"""
@@ -805,6 +819,7 @@ def remove_user_allergy(user_id: int, allergy_name: str):
             
         return {"status": "error", "message": "ไม่พบข้อมูลแพ้อาหารเดิม"}
 
+#4.26 user/user_id/DietType/remove remove User DietType
 @app.delete("/user/{user_id}/diet-type/remove")
 def remove_user_diet(user_id: int, diet_name: str):
     """ลบรูปแบบการกิน 1 รายการ (ส่งชื่อที่ต้องการลบมาทาง Query Parameter)"""
@@ -821,7 +836,8 @@ def remove_user_diet(user_id: int, diet_name: str):
             
         return {"status": "error", "message": "ไม่พบข้อมูลรูปแบบการกินเดิม"}
 
-# 3. API เพิ่มรูปแบบการกิน (Diet Type)
+#4.27 user.user_id_diet=type/add Add User Diet
+# API เพิ่มรูปแบบการกิน (Diet Type)
 @app.post("/user/{user_id}/diet-type/add")
 def add_user_diet(user_id: int, payload: DietTypeAddSchema):
     with engine.connect() as conn:
@@ -843,8 +859,9 @@ def add_user_diet(user_id: int, payload: DietTypeAddSchema):
         )
         conn.commit()
         return {"status": "success", "message": "เพิ่มรูปแบบการกินเรียบร้อย", "updated_diet_types": new_diet}
+
 # ==========================================
-# ⚙️ ตรวจสอบและอัปเดตฐานข้อมูล (Auto-Patch)
+# ตรวจสอบและอัปเดตฐานข้อมูล (Auto-Patch)
 # ==========================================
 # สั่งให้ระบบสร้างคอลัมน์ target_cal อัตโนมัติ (ถ้ายังไม่มี)
 try:
@@ -854,18 +871,7 @@ try:
 except Exception as e:
     print(f"DB Patch Note: {e}")
 
-# ==========================================
-# 📝 Pydantic Schema สำหรับอัปเดตโปรไฟล์
-# ==========================================
-class UserEditProfileSchema(BaseModel):
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    password: Optional[str] = None
-    target_cal: Optional[int] = None
-
-# ==========================================
-# 👤 API สำหรับแก้ไขข้อมูลบัญชีผู้ใช้
-# ==========================================
+#4.28 user/useer_id/edit
 @app.put("/user/{user_id}/edit")
 def edit_user_profile(user_id: int, payload: UserEditProfileSchema):
     """
@@ -919,6 +925,8 @@ def edit_user_profile(user_id: int, payload: UserEditProfileSchema):
         conn.commit()
 
     return {"status": "success", "message": "อัปเดตข้อมูลโปรไฟล์เรียบร้อยแล้ว!"}
+
+#4.29 user/user_id/account Get Account Management
 @app.get("/user/{user_id}/account")
 def get_account_management(user_id: int):
     """
