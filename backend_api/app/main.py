@@ -17,9 +17,8 @@ from datetime import datetime
 #http://127.0.0.1:8000/docs#/
 
 
-# ==========================================
+
 # 1. ตั้งค่า API และโหลด AI Models
-# ==========================================
 app = FastAPI(title="Smart Fridge API", description="AI Recipe Recommendation & User System")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,17 +30,15 @@ try:
     recipe_vectors = joblib.load(os.path.join(MODELS_DIR, 'recipe_vectors.joblib'))
     bigram_model = joblib.load(os.path.join(MODELS_DIR, 'bigram_model.joblib'))
     df_api = joblib.load(os.path.join(MODELS_DIR, 'df_for_api.joblib'))
-    print("✅ AI พร้อมรับออเดอร์แล้ว!")
+    print("AI พร้อมรับออเดอร์แล้ว!")
 except Exception as e:
-    print(f"❌ โหลด AI ไม่สำเร็จ: {e}")
+    print(f"โหลด AI ไม่สำเร็จ: {e}")
 
 # เครื่องมือเข้ารหัสผ่าน
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ==========================================
+
 # 2. Pydantic Models (หน้าตาข้อมูล รับ/ส่ง)
-# ==========================================
-# สำหรับ AI แนะนำอาหาร
 class FridgeRequest(BaseModel):
     ingredients: List[str]
     top_k: int = 5
@@ -94,9 +91,8 @@ class DietTypeAddSchema(BaseModel):
 class ForgotPasswordSchema(BaseModel):
     email: str
 
-# ==========================================
+
 # 3. Helper Functions (ฟังก์ชันช่วยประมวลผล)
-# ==========================================
 def tokenize_ingredients(ingredient_list):
     text = " ".join(ingredient_list).lower()
     text = re.sub(r'[^a-z\s]', '', text)
@@ -108,16 +104,16 @@ def get_recipe_vector(tokens, model):
         return np.zeros(model.vector_size)
     return np.mean(vectors, axis=0)
 
-# ==========================================
+#---------------------------------------------------------------------------------------------------------------------------------------------------------
 # 4. API Endpoints (ช่องทางติดต่อ)
-# ==========================================
+#---------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# 4.1 Health Check (เช็คสถานะเซิร์ฟเวอร์)
+# 4.1 Read Root (เช็คสถานะเซิร์ฟเวอร์)
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Smart Fridge API is running perfectly!"}
 
-# 4.2 DB Connection Check (เช็คฐานข้อมูล)
+# 4.2 test-db Test Database Connection (เช็คฐานข้อมูล)
 @app.get("/test-db")
 def test_database_connection(db: Session = Depends(get_db)):
     try:
@@ -125,8 +121,8 @@ def test_database_connection(db: Session = Depends(get_db)):
         return {"status": "success", "message": "Connected to AWS RDS successfully!", "db_version": result[0]}
     except Exception as e:
         return {"status": "error", "message": "Failed to connect to AWS RDS", "error_detail": str(e)}
-
-# 4.3 AI แนะนำอาหาร
+    
+# 4.3 recommend แนะนำอาหาร
 @app.post("/recommend", response_model=dict)
 def recommend_recipes(request: FridgeRequest):
     raw_tokens = tokenize_ingredients(request.ingredients)
@@ -193,7 +189,6 @@ def register(user: UserRegisterSchema):
         return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
 
 # 4.5 เข้าสู่ระบบ (Login)
-
 @app.post("/login")
 def login(user: UserLoginSchema):
     with engine.connect() as conn:
@@ -212,9 +207,8 @@ def login(user: UserLoginSchema):
             }
         else:
             return {"status": "error", "message": "รหัสผ่านไม่ถูกต้อง"}
-# ==========================================
-# 🔄 1. API สำหรับรีเซ็ตรหัสผ่านเป็น "1234"
-# ==========================================
+
+# 4.6 reset-password 1234
 @app.post("/user/reset-password")
 def reset_password(payload: ForgotPasswordSchema):
     """
@@ -243,9 +237,7 @@ def reset_password(payload: ForgotPasswordSchema):
         return {"status": "success", "message": "รีเซ็ตรหัสผ่านเป็น 1234 เรียบร้อยแล้ว!"}
 
 
-# ==========================================
-# ❄️ 5. API จัดการของในตู้เย็น (Fridge)
-# ==========================================
+#4.7 fridge/{user_id} get Fridge Items follow by Expiration date
 @app.get("/fridge/{user_id}")
 def get_fridge_items(user_id: int):
     """
@@ -285,12 +277,8 @@ def get_fridge_items(user_id: int):
             })
             
         return {"status": "success", "total": len(fridge_list), "data": fridge_list}
-# ==========================================
-# ❄️ 5. API จัดการของในตู้เย็น (Fridge) [อัปเดตคืนค่า Ingredient ID]
-# ==========================================
-# ==========================================
-# ❄️ 5. API จัดการของในตู้เย็น (Fridge) [อัปเดตคืนค่า ID]
-# ==========================================
+
+#4.8 fridge/add Add Fridge Item
 @app.post("/fridge/add")
 def add_fridge_item(item: FridgeItemAddSchema):
     with engine.connect() as conn:
@@ -319,6 +307,7 @@ def add_fridge_item(item: FridgeItemAddSchema):
             "fridge_id": result[0]   # <--- ส่ง ID กลับไปให้ Mobile App
         }
 
+#4.9 fridge remove
 @app.delete("/fridge/remove/{fridge_id}")
 def remove_fridge_item(fridge_id: int):
     with engine.connect() as conn:
@@ -326,9 +315,8 @@ def remove_fridge_item(fridge_id: int):
         conn.commit()
         return {"status": "success", "message": "ลบของออกจากตู้เย็นแล้ว!"}
 
-# ==========================================
-# 🕒 API จัดการประวัติทำอาหาร (History)
-# ==========================================
+
+#4.10 history/add menage History to cook
 @app.post("/history/add")
 def add_history(history: HistoryAddSchema):
     # ถ้าไม่ระบุเวลามา ให้ใช้เวลาปัจจุบันของเซิร์ฟเวอร์
@@ -345,6 +333,7 @@ def add_history(history: HistoryAddSchema):
         conn.commit()
         return {"status": "success", "message": "บันทึกประวัติการทำอาหารเรียบร้อย!"}
 
+#4.11 history remove
 @app.delete("/history/remove/{history_id}")
 def remove_history(history_id: int):
     with engine.connect() as conn:
@@ -352,13 +341,15 @@ def remove_history(history_id: int):
         conn.commit()
         return {"status": "success", "message": "ลบประวัติแล้ว!"}
 
+#4.12 history/user_id Get User History
+# 4.12 history/{user_id} Get User History
 @app.get("/history/{user_id}")
 def get_user_history(user_id: int):
     with engine.connect() as conn:
-        # ดึงประวัติ พร้อมจอย (JOIN) กับตาราง recipes เพื่อเอาชื่อเมนูมาโชว์ด้วย
+        # ดึงประวัติ พร้อมจอย (JOIN) กับตาราง recipes เพื่อเอาชื่อเมนูและแคลอรีมาโชว์ด้วย
         result = conn.execute(
             text("""
-                SELECT h.history_id, h.history_date, h.history_type, r.recipe_id, r.title 
+                SELECT h.history_id, h.history_date, h.history_type, r.recipe_id, r.title, r.calories 
                 FROM history h
                 JOIN recipes r ON h.recipe_id = r.recipe_id
                 WHERE h.user_id = :u
@@ -375,14 +366,13 @@ def get_user_history(user_id: int):
                 "history_date": row[1].strftime("%Y-%m-%d %H:%M:%S"),
                 "history_type": row[2],
                 "recipe_id": row[3],
-                "recipe_title": row[4]
+                "recipe_title": row[4],
+                "calories": row[5]  # <--- เพิ่มการดึงแคลอรีตรงนี้ครับ
             })
             
         return {"status": "success", "total": len(history_list), "data": history_list}
 
-# ==========================================
-# ⭐ 7. API จัดการรีวิว (Review)
-# ==========================================
+#4.13 review/add Add Review
 @app.post("/review/add")
 def add_review(review: ReviewAddSchema):
     if review.rating < 1 or review.rating > 5:
@@ -399,12 +389,15 @@ def add_review(review: ReviewAddSchema):
         conn.commit()
         return {"status": "success", "message": "ขอบคุณสำหรับรีวิวครับ!"}
 
+#4.14 review remove
 @app.delete("/review/remove/{review_id}")
 def remove_review(review_id: int):
     with engine.connect() as conn:
         conn.execute(text("DELETE FROM reviews WHERE review_id = :r"), {"r": review_id})
         conn.commit()
         return {"status": "success", "message": "ลบรีวิวเรียบร้อยแล้ว!"}
+    
+#4.15 
 @app.get("/recipes/{recipe_id}/reviews")
 def get_recipe_reviews(recipe_id: int):
     """
@@ -726,25 +719,44 @@ def remove_shopping_list_item(list_id: int):
 @app.get("/user/{user_id}/profile")
 def get_user_profile(user_id: int):
     """
-    ดึงข้อมูลโปรไฟล์ผู้ใช้ รวมถึงรายการแพ้อาหารและรูปแบบการกิน
+    ดึงข้อมูลโปรไฟล์ผู้ใช้ รวมถึงรายการแพ้อาหาร รูปแบบการกิน 
+    และแคลอรีรวมที่กินไปใน 'วันนี้'
     """
     with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT display_name, allergies, diet_type FROM users WHERE user_id = :u"),
+        # 1. ดึงข้อมูล User (เพิ่ม target_cal เข้ามา)
+        user_result = conn.execute(
+            text("SELECT display_name, allergies, diet_type, target_cal FROM users WHERE user_id = :u"),
             {"u": user_id}
         ).fetchone()
         
-        if not result:
+        if not user_result:
             return {"status": "error", "message": "ไม่พบผู้ใช้งานนี้"}
             
-        # หั่นคำที่คั่นด้วยลูกน้ำ (,) ให้กลายเป็น List เพื่อให้ Mobile นำไปโชว์ทีละกล่องได้ง่าย
-        allergies_list = [a.strip() for a in result[1].split(",")] if result[1] else []
-        diet_list = [d.strip() for d in result[2].split(",")] if result[2] else []
+        # 2. คำนวณแคลอรีรวมเฉพาะของ "วันนี้" (CURRENT_DATE)
+        cal_result = conn.execute(
+            text("""
+                SELECT SUM(r.calories) 
+                FROM history h
+                JOIN recipes r ON h.recipe_id = r.recipe_id
+                WHERE h.user_id = :u AND DATE(h.history_date) = CURRENT_DATE
+            """),
+            {"u": user_id}
+        ).fetchone()
+        
+        # จัดการค่า Null กรณีที่วันนี้ยังไม่ได้กินอะไรเลย (หรือยังไม่ได้ตั้งเป้าหมาย)
+        consumed_cal = int(cal_result[0]) if cal_result and cal_result[0] else 0
+        target_cal = user_result[3] if user_result[3] else 0
+            
+        # 3. หั่นคำที่คั่นด้วยลูกน้ำ (,) ให้กลายเป็น List
+        allergies_list = [a.strip() for a in user_result[1].split(",")] if user_result[1] else []
+        diet_list = [d.strip() for d in user_result[2].split(",")] if user_result[2] else []
             
         return {
             "status": "success",
             "data": {
-                "display_name": result[0],
+                "display_name": user_result[0],
+                "target_cal": target_cal,           # ส่งเป้าหมายให้แอป
+                "consumed_calories": consumed_cal,  # ส่งผลรวมแคลอรีของวันนี้ให้แอป
                 "allergies": allergies_list,
                 "diet_types": diet_list
             }
