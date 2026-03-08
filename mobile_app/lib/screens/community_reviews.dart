@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +14,7 @@ class CommunityReviews extends StatefulWidget {
 
 class _CommunityReviewsState extends State<CommunityReviews> {
   List<dynamic> _reviews = [];
+  int _selectedRating = 5;
   bool _isLoading = true;
   final TextEditingController _commentController = TextEditingController();
 
@@ -72,11 +74,10 @@ class _CommunityReviewsState extends State<CommunityReviews> {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 16),
                           child: _buildReviewCard(
-                            userName:
-                                review['reviewer_name'] ?? "Anonymous", // ✅
-                            time: review['created_at'] ?? "", // ✅
-                            comment: review['comment'] ?? "", // ✅
-                            rating: review['rating'] ?? 5, // ✅
+                            userName: review['reviewer_name'] ?? "Anonymous",
+                            time: _formatDate(review['created_at'] ?? ""),
+                            comment: review['comment'] ?? "",
+                            rating: (review['rating'] ?? 5).toInt(),
                             initial: (review['reviewer_name'] ?? "A")[0]
                                 .toUpperCase(),
                           ),
@@ -205,9 +206,9 @@ class _CommunityReviewsState extends State<CommunityReviews> {
         body: jsonEncode({
           "user_id": int.parse(userId), // ✅ ตาม Schema
           "recipe_id": widget.recipeId, // ✅ ตาม Schema
-          "rating":
-              5, // ตัวอย่าง: ตั้งไว้ 5 ดาว (หรือสุรเดชจะทำตัวเลือกดาวเพิ่มก็ได้ครับ)
+          "rating": _selectedRating,
           "comment": _commentController.text, // ✅ ตาม Schema
+          "created_at": DateTime.now().toIso8601String(),
         }),
       );
 
@@ -226,7 +227,6 @@ class _CommunityReviewsState extends State<CommunityReviews> {
     }
   }
 
-  // ✅ 2. ปรับปรุงปุ่มส่งใน Widget
   Widget _buildReviewInput() {
     return Row(
       children: [
@@ -249,9 +249,16 @@ class _CommunityReviewsState extends State<CommunityReviews> {
           ),
         ),
         const SizedBox(width: 12),
-        // ✅ เปลี่ยนปุ่มส่งให้เรียกใช้ _submitReview
         GestureDetector(
-          onTap: _submitReview, // ✨ เรียกฟังก์ชันส่งข้อมูล
+          onTap: () {
+            if (_commentController.text.isNotEmpty) {
+              _showRatingDialog(); // ✅ ให้เลือกดาวก่อนส่ง
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Please write a comment first")),
+              );
+            }
+          },
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(
@@ -262,6 +269,99 @@ class _CommunityReviewsState extends State<CommunityReviews> {
           ),
         ),
       ],
+    );
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      DateTime dateTime = DateTime.parse(dateStr);
+      return DateFormat('dd/MM/yyyy - HH:mm').format(dateTime);
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  void _showRatingDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          return IconButton(
+                            icon: Icon(
+                              index < _selectedRating
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: Colors.orange,
+                              size: 40,
+                            ),
+                            onPressed: () {
+                              setModalState(() => _selectedRating = index + 1);
+                            },
+                          );
+                        }),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00C853),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _submitReview(); 
+                            },
+                            child: const Text(
+                              "OK",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEF5350),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text(
+                              "Cancel",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -107,6 +107,23 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                       ],
                     ),
                     const SizedBox(height: 20),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child:
+                          _recipeData!['image_url'] != null &&
+                              _recipeData!['image_url'].toString().isNotEmpty
+                          ? Image.network(
+                              _recipeData!['image_url'],
+                              height: 220,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              // ✅ กรณีโหลดรูปไม่ได้ (เช่น ลิงก์เสีย) ให้โชว์สีพื้นหลังเทาและไอคอน
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildImagePlaceholder(),
+                            )
+                          : _buildImagePlaceholder(), // ✅ กรณีไม่มีข้อมูลลิงก์ส่งมา
+                    ),
+                    const SizedBox(height: 20),
 
                     // 2. Summary Card: ข้อมูล Calories, Match % และเวลาที่ใช้
                     Container(
@@ -124,7 +141,7 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                           ), // ✅
                           _buildVerticalDivider(),
                           _buildStatItem(
-                            isFromMenu ? "100%" : "-",
+                            isFromMenu ? "${widget.matchPercent}" : "-",
                             "Ingredients",
                           ),
                           _buildVerticalDivider(),
@@ -135,7 +152,7 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20),
 
                     // 3. Section: รายการวัตถุดิบ (Ingredients)
                     const Text(
@@ -450,6 +467,25 @@ Widget _buildActionButton({
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
+    ),
+  );
+}
+
+Widget _buildImagePlaceholder() {
+  return Container(
+    height: 220,
+    width: double.infinity,
+    color: Colors.grey.shade200,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.restaurant_menu, size: 60, color: Colors.grey.shade400),
+        const SizedBox(height: 8),
+        Text(
+          "No image available",
+          style: TextStyle(color: Colors.grey.shade500),
+        ),
+      ],
     ),
   );
 }

@@ -217,7 +217,7 @@ class _HistoriesState extends State<Histories> {
                             mealTime:
                                 "${item['history_type'].toUpperCase()} - $formattedTime",
                             menuName: item['recipe_title'],
-                            calories: "350",
+                            calories: "${item['calories']} Cal.",
                           ),
                         );
                       }).toList(),
@@ -338,7 +338,7 @@ class _HistoriesState extends State<Histories> {
                                 ),
                               ),
                               Text(
-                                "subtitle",
+                                calories,
                                 style: const TextStyle(
                                   color: Colors.grey,
                                   fontSize: 12,

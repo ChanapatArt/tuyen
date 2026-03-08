@@ -5,8 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:mobile_app/services/auth_service.dart';
 
 class IngredientList extends StatefulWidget {
-  final VoidCallback onFindMenu;
-
+  final Function(List<String>) onFindMenu;
   final TextEditingController nameController = TextEditingController();
   final TextEditingController qtyController = TextEditingController();
   final TextEditingController expireController = TextEditingController();
@@ -41,28 +40,42 @@ class _IngredientList extends State<IngredientList> {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
 
         if (responseData['status'] == 'success') {
-          final List<dynamic> data = responseData['data'];
+          List<dynamic> data = responseData['data']; // ข้อมูลดิบจาก Azure
 
           setState(() {
+            // ✅ นำ Logic ที่ผมให้ไปใส่ตรงนี้เพื่อแปลงข้อมูลก่อนแสดงผล
             _foodItems = data.map((item) {
-              // คำนวณสีตามจำนวนวันที่เหลือ (days_remaining)
-              int days = item['days_remaining'] ?? 0;
-              Color statusColor = days <= 3
-                  ? Colors.red
-                  : (days <= 7 ? Colors.orange : Colors.green);
-
+              DateTime expiryRaw = DateTime.parse(item['expiry_date']);
+              DateTime now = DateTime.now();
+              DateTime today = DateTime(now.year, now.month, now.day);
+              DateTime expiry = DateTime(
+                expiryRaw.year,
+                expiryRaw.month,
+                expiryRaw.day,
+              );
+              int daysLeft = expiry.difference(today).inDays;
               return {
-                'fridge_id': item['fridge_id'],
-                'title': item['ingredient_name'],
-                'subtitle': 'Remaining: ${item['quantity']} ${item['unit']}',
-                'expiryDate': DateTime.parse(
-                  item['expiry_date'],
-                ), // แปลง String เป็น DateTime
-                'color': statusColor,
-                'isSelected': false,
-                'isNearExpiry': days <= 3, // ถ้าเหลือน้อยกว่า 3 วันให้เตือน
+                "fridge_id": item['fridge_id'],
+                "title": item['ingredient_name'],
+                "subtitle": 'Remaining: ${item['quantity']} ${item['unit']}',
+                "expiryDate": expiry,
+                "daysLeft": daysLeft,
+                // ✅ ใช้ Logic สีเดียวกันกับตอนกดปุ่ม OK
+                "color": daysLeft == 1
+                    ? Colors.red
+                    : (daysLeft <= 3 ? Colors.orange : Colors.green),
+                "isSelected": false,
+                "isNearExpiry": daysLeft <= 3,
               };
             }).toList();
+
+            // ✅ สั่งเรียงลำดับตามวันหมดอายุ (น้อยไปมาก)
+            _foodItems.sort(
+              (a, b) => (a['expiryDate'] as DateTime).compareTo(
+                b['expiryDate'] as DateTime,
+              ),
+            );
+
             _isLoading = false;
           });
         }
@@ -127,18 +140,18 @@ class _IngredientList extends State<IngredientList> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
                   children: [
-                    const ExpiryAlertCard(),
+                    if (_foodItems.isNotEmpty && _foodItems.first['daysLeft'] <= 3)
+                      ExpiryAlertCard(
+                        title: _foodItems.first['title'],
+                        daysLeft: _foodItems.first['daysLeft'],
+                      ),
                     ..._foodItems.asMap().entries.map((entry) {
                       int index = entry.key;
                       var item = entry.value;
-                      int daysLeft = _calculateRemainingDays(
-                        item['expiryDate'],
-                      );
+                      int daysLeft = item['daysLeft'];
 
                       return Dismissible(
-                        key: ValueKey(
-                          item['fridge_id'],
-                        ),
+                        key: ValueKey(item['fridge_id']),
                         direction: DismissDirection.endToStart,
                         background: Container(
                           margin: const EdgeInsets.symmetric(
@@ -223,14 +236,23 @@ class _IngredientList extends State<IngredientList> {
         height: 55,
         child: FloatingActionButton.extended(
           onPressed: () {
-            // เมื่อกดเอาเฉพาะไอเทมที่ isSelected เป็น true
-            widget.onFindMenu();
-            final selectedItems = _foodItems
+            // กรองเอาเฉพาะชื่อวัตถุดิบที่เลือก
+            List<String> selectedNames = _foodItems
                 .where((item) => item['isSelected'] == true)
+                .map((item) => item['title'].toString())
                 .toList();
-            print(
-              "เมนูแนะนำสำหรับ: ${selectedItems.map((e) => e['title']).toList()}",
-            );
+
+            if (selectedNames.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Please select ingredients first!"),
+                ),
+              );
+              return;
+            }
+
+            // ✅ ส่งรายชื่อวัตถุดิบกลับไปยัง HomeSubNavigator ผ่าน callback
+            widget.onFindMenu(selectedNames);
           },
           backgroundColor: Colors.green,
           shape: RoundedRectangleBorder(
@@ -255,7 +277,6 @@ class _IngredientList extends State<IngredientList> {
   }
 
   void _showAddIngredientDialog(BuildContext context) {
-    // ล้างค่า Controller ก่อนเริ่มใหม่ทุกครั้ง
     _selectedDate = null;
     widget.nameController.clear();
     widget.qtyController.clear();
@@ -265,7 +286,6 @@ class _IngredientList extends State<IngredientList> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        // ✅ ใช้ StatefulBuilder เพื่อให้ Modal อัปเดต UI (เช่น ปุ่ม OK) ได้ทันทีเมื่อเลือกวันที่
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Dialog(
@@ -438,26 +458,32 @@ class _IngredientList extends State<IngredientList> {
                                           response.body,
                                         );
 
-                                        // ✅ คำนวณวันที่เหลือให้ถูกต้องก่อนแทรกลงในรายการ
-                                        DateTime today = DateTime.now();
-                                        DateTime pureToday = DateTime(
-                                          today.year,
-                                          today.month,
-                                          today.day,
+                                        DateTime now = DateTime.now();
+                                        DateTime today = DateTime(
+                                          now.year,
+                                          now.month,
+                                          now.day,
                                         );
-                                        int daysLeft = _selectedDate!
-                                            .difference(pureToday)
+                                        DateTime expiry = DateTime(
+                                          _selectedDate!.year,
+                                          _selectedDate!.month,
+                                          _selectedDate!.day,
+                                        );
+                                        int daysLeft = expiry
+                                            .difference(today)
                                             .inDays;
 
                                         setState(() {
-                                          _foodItems.insert(0, {
+                                          // 1. เพิ่มข้อมูลเข้าไปใน List ก่อน
+                                          _foodItems.add({
                                             "fridge_id":
-                                                responseData['fridge_id'], // ✅ รับ ID ใหม่เพื่อใช้เป็น ValueKey
+                                                responseData['fridge_id'],
                                             "title": widget.nameController.text,
                                             "subtitle":
                                                 'Remaining: ${widget.qtyController.text} ${widget.unitController.text}',
                                             "expiryDate": _selectedDate,
-                                            "color": daysLeft <= 1
+                                            // ✅ ปรับเงื่อนไขสีให้ตรงกับ Logic หลังรีเฟรช
+                                            "color": daysLeft == 1
                                                 ? Colors.red
                                                 : (daysLeft <= 3
                                                       ? Colors.orange
@@ -466,7 +492,18 @@ class _IngredientList extends State<IngredientList> {
                                             "isNearExpiry": daysLeft <= 3,
                                             "daysLeft": daysLeft,
                                           });
+
+                                          // 2. ✅ สั่งเรียงลำดับใหม่ทันทีตามวันหมดอายุ (น้อยไปมาก)
+                                          _foodItems.sort(
+                                            (a, b) =>
+                                                (a['expiryDate'] as DateTime)
+                                                    .compareTo(
+                                                      b['expiryDate']
+                                                          as DateTime,
+                                                    ),
+                                          );
                                         });
+
                                         if (context.mounted)
                                           Navigator.pop(context);
                                       }
@@ -551,16 +588,23 @@ class _IngredientList extends State<IngredientList> {
 }
 
 class ExpiryAlertCard extends StatelessWidget {
-  const ExpiryAlertCard({super.key});
+  final String title;
+  final int daysLeft;
+
+  const ExpiryAlertCard({
+    super.key,
+    required this.title,
+    required this.daysLeft,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        height: 82,
-        margin: EdgeInsets.only(top: 16),
-        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+        height: 85, // ปรับความสูงเล็กน้อยเผื่อข้อความยาว
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
         decoration: BoxDecoration(
           color: const Color.fromARGB(255, 255, 241, 229),
           borderRadius: BorderRadius.circular(12),
@@ -573,56 +617,31 @@ class ExpiryAlertCard extends StatelessWidget {
                 color: Colors.orange[200],
                 borderRadius: BorderRadius.circular(8),
               ),
-              padding: EdgeInsets.all(4),
-              margin: EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.all(4),
+              margin: const EdgeInsets.only(right: 16),
               child: Icon(Icons.alarm, size: 40, color: Colors.orange[800]),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Expired notification",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-                ),
-                Text(
-                  "Green onions will expire in ? days!!",
-                  style: TextStyle(fontSize: 16),
-                ),
-              ],
+            Expanded(
+              // ใช้ Expanded กันข้อความล้นจอ
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Expired notification",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    "$title will expire in $daysLeft days!!",
+                    style: const TextStyle(fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
-
-Widget _buildModalTextField({
-  required String hintText,
-  TextEditingController? controller,
-}) {
-  return TextField(
-    controller: controller,
-    decoration: InputDecoration(
-      hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.grey),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Colors.grey),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-    ),
-  );
-}
-
-int _calculateRemainingDays(DateTime expiryDate) {
-  final now = DateTime.now();
-  // คำนวณส่วนต่างของเวลา
-  final difference = expiryDate.difference(now).inDays;
-  return difference;
 }

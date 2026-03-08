@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_app/screens/histories.dart';
 import 'package:mobile_app/screens/personal_inform.dart';
@@ -74,14 +75,14 @@ Future<bool> _showExitDialog(BuildContext context) async {
           content: const Text("Are you sure you want to exit TuYen?"),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(
-                context,
-              ).pop(false),
-              child: const Text("Cancel", style: TextStyle(color: Colors.black)),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(color: Colors.black),
+              ),
             ),
             ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(true),
+              onPressed: () => SystemNavigator.pop(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade400,
                 foregroundColor: Colors.white,

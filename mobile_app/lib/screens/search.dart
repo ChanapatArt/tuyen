@@ -123,12 +123,12 @@ class _SearchState extends State<Search> {
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _searchResults
-                        .isEmpty // ✅ ถ้ายังไม่มีผลลัพธ์การค้นหา
-                  ? _buildInitialView() // ✅ แสดงหน้า "ชวนค้นหา" แทน
+                        .isEmpty 
+                  ? _buildInitialView() 
                   :
                     // 5. รายการเมนูแบบ Grid
                     GridView.builder(
-                      shrinkWrap: true, // สำคัญ: เพื่อให้ใช้ใน ScrollView ได้
+                      shrinkWrap: true, 
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
@@ -147,6 +147,7 @@ class _SearchState extends State<Search> {
                           "${item['calories'] ?? 0} kcal",
                           Colors.grey.shade200,
                           item['recipe_id'],
+                          item['image_url'],
                         );
                       },
                     ),
@@ -183,6 +184,7 @@ class _SearchState extends State<Search> {
     String kcal,
     Color color,
     int recipeId,
+    String? imageUrl,
   ) {
     return GestureDetector(
       onTap: () {
@@ -199,7 +201,23 @@ class _SearchState extends State<Search> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ส่วนรูปภาพสมมติ
-            Expanded(child: Container(color: color)),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? Image.network(
+                        imageUrl,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        // ✅ กรณีลิงก์เสียให้โชว์สีพื้นหลังเทา
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildCardPlaceholder(),
+                      )
+                    : _buildCardPlaceholder(), // ✅ กรณีไม่มี URL
+              ),
+            ),
             // ส่วนรายละเอียด
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -227,6 +245,14 @@ class _SearchState extends State<Search> {
       ),
     );
   }
+}
+
+Widget _buildCardPlaceholder() {
+  return Container(
+    width: double.infinity,
+    color: Colors.grey.shade100,
+    child: Icon(Icons.restaurant_menu, color: Colors.grey.shade300, size: 40),
+  );
 }
 
 Widget _buildInitialView() {
