@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_app/screens/home.dart';
 import 'package:mobile_app/screens/signup.dart';
 import 'package:mobile_app/services/auth_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -50,7 +52,7 @@ class _LoginPageState extends State<LoginPage> {
               // 2. ช่องกรอก User
               _buildTextField(
                 controller: _userController,
-                hintText: "User",
+                hintText: "Email",
                 icon: Icons.email_outlined,
               ),
               const SizedBox(height: 16),
@@ -67,7 +69,9 @@ class _LoginPageState extends State<LoginPage> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    _showResetPasswordModal();
+                  },
                   child: const Text(
                     "Forgot Password?",
                     style: TextStyle(color: Color(0xFF28B446)),
@@ -89,7 +93,7 @@ class _LoginPageState extends State<LoginPage> {
                       _passwordController.text,
                     );
                     if (!mounted) return;
-                    if (success){
+                    if (success) {
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (context) => const Home()),
@@ -97,7 +101,7 @@ class _LoginPageState extends State<LoginPage> {
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text("อีเมลหรือรหัสผ่านไม่ถูกต้อง"),
+                          content: Text("Incorrect email or password"),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -193,5 +197,121 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
+  }
+
+  void _showResetPasswordModal() {
+    final TextEditingController _resetEmailController = TextEditingController();
+
+    // ✅ เปลี่ยนจาก showModalBottomSheet เป็น showDialog เพื่อให้ลอยกลางจอ
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15), // ขอบมนสวยงามตามธีม TuYen
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min, // ให้ขนาดพอดีกับเนื้อหา
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Forgot Password?",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Enter your email to reset password to '1234'.",
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
+
+                // ช่องกรอก Email
+                _buildTextField(
+                  controller: _resetEmailController,
+                  hintText: "Email",
+                  icon: Icons.email_outlined,
+                ),
+                const SizedBox(height: 24),
+
+                // ปุ่มกดยืนยันและยกเลิก
+                Row(
+                  children: [
+                    // ❌ ปุ่ม Cancel (สีแดง)
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF41F11),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text("Cancel"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // ✅ ปุ่ม Reset (สีเขียว)
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          FocusScope.of(context).unfocus();
+                          if (_resetEmailController.text.isNotEmpty) {
+                            await _handleResetPassword(
+                              _resetEmailController.text,
+                            );
+                            if (context.mounted) Navigator.pop(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF28B446),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          "Reset",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ฟังก์ชันยิง API ไปยัง Azure
+  Future<void> _handleResetPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AuthService.baseUrl}/user/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"email": email}),
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(responseData['message'] ?? "Request sent!"),
+            backgroundColor: responseData['status'] == 'success'
+                ? Colors.green
+                : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print("Reset Error: $e");
+    }
   }
 }

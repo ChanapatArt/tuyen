@@ -188,11 +188,7 @@ class _SearchState extends State<Search> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) =>
-                RecipeDetails(recipeId: recipeId, title: title),
-          ),
-          // MaterialPageRoute(builder: (context) => RecipeDetails(title: title)),
+          MaterialPageRoute(builder: (context) => RecipeDetails(title: title)),
         );
       },
       child: Card(

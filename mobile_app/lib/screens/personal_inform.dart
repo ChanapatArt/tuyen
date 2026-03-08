@@ -14,6 +14,8 @@ class PersonalInfoPage extends StatefulWidget {
 
 class _PersonalInfoPageState extends State<PersonalInfoPage> {
   String displayName = "Loading...";
+  int target = 0;
+  int consumed_calories = 0;
   String email = "";
   List<String> foodAllergies = [];
   List<String> dietTypes = [];
@@ -41,6 +43,8 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
           final data = responseData['data'];
           setState(() {
             displayName = data['display_name'] ?? "No Name";
+            target = data['target_cal'] ?? 2000;
+            consumed_calories = data['consumed_calories'] ?? 0;
             foodAllergies = List<String>.from(data['allergies'] ?? []);
             dietTypes = List<String>.from(data['diet_types'] ?? []);
             isLoading = false;
@@ -104,11 +108,12 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                           if (_inputController.text.isNotEmpty) {
                             String? userId = await AuthService.getUserId();
                             if (userId == null) return;
-
-                            // ✅ 2. แยก Endpoint ตามค่า isAllergy
-                            String subPath = isAllergy ? "allergies/add" : "diet-type/add";
-                            String bodyKey = isAllergy ? "allergy_name" : "diet_name";
-
+                            String subPath = isAllergy
+                                ? "allergies/add"
+                                : "diet-type/add";
+                            String bodyKey = isAllergy
+                                ? "allergy_name"
+                                : "diet_name";
                             try {
                               final response = await http.post(
                                 Uri.parse(
@@ -199,7 +204,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                 // 2. แสดงรายการ Food Allergies ตามจำนวนจริง
                 _buildSectionHeader(
                   "Food allergies",
-                  () => _showCustomDialog("Food allergies", foodAllergies, isAllergy: true),
+                  () => _showCustomDialog(
+                    "Food allergies",
+                    foodAllergies,
+                    isAllergy: true,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 ...foodAllergies.map(
@@ -221,15 +230,45 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                     ),
 
                     // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
-                    onDismissed: (direction) {
+                    onDismissed: (direction) async {
+                      final String itemToRemove = item;
+
                       setState(() {
-                        foodAllergies.remove(item); // ลบข้อมูลออกจาก List
+                        foodAllergies.remove(itemToRemove);
                       });
 
-                      // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text("$item removed")));
+                      try {
+                        String? userId = await AuthService.getUserId();
+                        if (userId == null) return;
+
+                        // ✅ ปรับ URL ให้ส่งแบบ Query Parameter (?allergy_name=ชื่อ)
+                        final response = await http.delete(
+                          Uri.parse(
+                            '${AuthService.baseUrl}/user/$userId/allergies/remove?allergy_name=$itemToRemove',
+                          ),
+                          headers: {'Content-Type': 'application/json'},
+                        );
+
+                        if (response.statusCode == 200) {
+                          final responseData = jsonDecode(response.body);
+                          if (context.mounted &&
+                              responseData['status'] == 'success') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  responseData['message'] ??
+                                      "$itemToRemove removed",
+                                ),
+                              ),
+                            );
+                          }
+                        } else {
+                          _fetchUserProfile(); // คืนค่าหากลบไม่สำเร็จ
+                        }
+                      } catch (e) {
+                        print("Delete Allergy Error: $e");
+                        _fetchUserProfile();
+                      }
                     },
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -243,7 +282,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                 // 3. แสดงรายการ Diet type ตามจำนวนจริง
                 _buildSectionHeader(
                   "Diet type",
-                  () => _showCustomDialog("Diet type", dietTypes, isAllergy: false),
+                  () => _showCustomDialog(
+                    "Diet type",
+                    dietTypes,
+                    isAllergy: false,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 ...dietTypes.map(
@@ -264,16 +307,43 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                       child: const Icon(Icons.delete, color: Colors.white),
                     ),
 
-                    // 🗑️ ฟังก์ชันที่จะทำงานเมื่อสไลด์จนสุด
-                    onDismissed: (direction) {
+                    onDismissed: (direction) async {
+                      final String itemToRemove = item;
+
                       setState(() {
-                        dietTypes.remove(item); // ลบข้อมูลออกจาก List
+                        dietTypes.remove(itemToRemove);
                       });
 
-                      // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text("$item removed")));
+                      try {
+                        String? userId = await AuthService.getUserId();
+                        if (userId == null) return;
+                        final response = await http.delete(
+                          Uri.parse(
+                            '${AuthService.baseUrl}/user/$userId/diet-type/remove?diet_name=$itemToRemove',
+                          ),
+                          headers: {'Content-Type': 'application/json'},
+                        );
+
+                        if (response.statusCode == 200) {
+                          final responseData = jsonDecode(response.body);
+                          if (context.mounted &&
+                              responseData['status'] == 'success') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  responseData['message'] ??
+                                      "$itemToRemove removed",
+                                ),
+                              ),
+                            );
+                          }
+                        } else {
+                          _fetchUserProfile(); // คืนค่าหากลบไม่สำเร็จ
+                        }
+                      } catch (e) {
+                        print("Delete Diet Type Error: $e");
+                        _fetchUserProfile();
+                      }
                     },
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -396,17 +466,17 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
               ],
             ),
             const SizedBox(height: 20),
-            const Text(
-              "Total calories (target 2000)",
+            Text(
+              "Total calories (target ${isLoading ? '...' : target})",
               style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
             const SizedBox(height: 5),
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  "1,250",
+                  "${isLoading ? '0' : consumed_calories }",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 40,
@@ -423,11 +493,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 15),
+            SizedBox(height: 15),
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: const LinearProgressIndicator(
-                value: 1250 / 2000,
+              child: LinearProgressIndicator(
+                value: target > 0 ? (consumed_calories / target) : 0,
                 minHeight: 10,
                 backgroundColor: Colors.white10,
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.green),

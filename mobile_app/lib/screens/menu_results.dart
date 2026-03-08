@@ -61,7 +61,7 @@ class MenuResultsScreen extends StatelessWidget {
                     recipeId: 410,
                   ),
                   RecipeCard(
-                    title: "Minced pork omelet",
+                    title: "hey nic  add the chicken   leek and potato soup",
                     kcal: "test",
                     time: "12:00",
                     matchPercent: "100%",
@@ -99,9 +99,7 @@ class RecipeCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-
-          MaterialPageRoute(builder: (context) => RecipeDetails(recipeId: recipeId , title: title)),
-          // MaterialPageRoute(builder: (context) => RecipeDetails(title: title)),
+          MaterialPageRoute(builder: (context) => RecipeDetails(title: title, matchPercent: matchPercent,)),
         );
       },
       child: Card(

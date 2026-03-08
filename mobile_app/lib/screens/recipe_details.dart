@@ -5,10 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:mobile_app/services/auth_service.dart';
 
 class RecipeDetails extends StatefulWidget {
-  final int recipeId;
   final String title;
-  const RecipeDetails({super.key, required this.title, required this.recipeId});
-  // const RecipeDetails({super.key, required this.title});
+  final String? matchPercent;
+  const RecipeDetails({super.key, required this.title, this.matchPercent});
   @override
   State<RecipeDetails> createState() => _RecipeDetailsState();
 }
@@ -26,7 +25,9 @@ class _RecipeDetailsState extends State<RecipeDetails> {
   Future<void> _fetchRecipeDetails() async {
     try {
       final response = await http.get(
-        Uri.parse('${AuthService.baseUrl}/recipes/${widget.recipeId}/details'),
+        Uri.parse(
+          '${AuthService.baseUrl}/recipesbyname/${widget.title}/details',
+        ),
       );
 
       if (response.statusCode == 200) {
@@ -44,6 +45,7 @@ class _RecipeDetailsState extends State<RecipeDetails> {
 
   @override
   Widget build(BuildContext context) {
+    bool isFromMenu = widget.matchPercent != null;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -121,7 +123,10 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                             "Kcal",
                           ), // ✅
                           _buildVerticalDivider(),
-                          _buildStatItem("100%", "Match"),
+                          _buildStatItem(
+                            isFromMenu ? "100%" : "-",
+                            "Ingredients",
+                          ),
                           _buildVerticalDivider(),
                           _buildStatItem(
                             "${_recipeData!['prep_time'] ?? 0}",
@@ -226,31 +231,179 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                     const SizedBox(height: 40),
 
                     // 5. ปุ่ม Read reviews
-                    SizedBox(
-                      width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CommunityReviews(recipeId: _recipeData!['recipe_id']),
+                    Row(
+                      children: [
+                        // ✅ ถ้ามาจาก Menu Result ให้โชว์ปุ่ม Let's Cook
+                        if (isFromMenu) ...[
+                          Expanded(
+                            child: _buildActionButton(
+                              label: "Let's Cook",
+                              icon: Icons.restaurant_menu,
+                              iconColor: Colors.white,
+                              color: const Color(0xFF12B347),
+                              onTap: () async {
+                                // 1. แสดง Dialog ยืนยันการทำอาหาร
+                                bool confirm =
+                                    await showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        backgroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            15,
+                                          ),
+                                        ),
+                                        title: const Text(
+                                          "Confirm Cooking",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        content: Text(
+                                          "Do you want to start cooking ${widget.title}?",
+                                        ),
+                                        actions: [
+                                          Row(
+                                            children: [
+                                              // ✅ ปุ่มยกเลิก (สีแดง)
+                                              Expanded(
+                                                child: ElevatedButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      ),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(
+                                                      0xFFF41F11,
+                                                    ), // สีแดงเดียวกับปุ่ม Cancel
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  child: const Text(
+                                                    "Cancel",
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              // ✅ ปุ่มยืนยัน (สีเขียว)
+                                              Expanded(
+                                                child: ElevatedButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      ),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(
+                                                      0xFF28B446,
+                                                    ), // สีเขียวเดียวกับปุ่ม OK
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  child: const Text(
+                                                    "Confirm",
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ) ??
+                                    false;
+
+                                if (confirm) {
+                                  // 2. ดึงข้อมูล User และเตรียมข้อมูลส่ง API
+                                  String? userId =
+                                      await AuthService.getUserId();
+                                  if (userId == null) return;
+
+                                  try {
+                                    final response = await http.post(
+                                      Uri.parse(
+                                        '${AuthService.baseUrl}/history/add',
+                                      ),
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                      },
+                                      body: jsonEncode({
+                                        "user_id": int.parse(userId),
+                                        "recipe_id": _recipeData!['recipe_id'],
+                                        "history_date": DateTime.now()
+                                            .toIso8601String(),
+                                        "history_type": "cooking",
+                                      }),
+                                    );
+
+                                    final responseData = jsonDecode(
+                                      response.body,
+                                    );
+
+                                    if (responseData['status'] == 'success') {
+                                      // 3. แจ้งเตือนเมื่อสำเร็จตาม Message จาก API
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              responseData['message'],
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  } catch (e) {
+                                    print("History Error: $e");
+                                  }
+                                }
+                              },
                             ),
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.chat_bubble,
-                          color: Color(0xFF28B446),
-                        ),
-                        label: const Text("Read reviews"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+
+                        // ปุ่ม Read reviews (แสดงเสมอ)
+                        Expanded(
+                          child: _buildActionButton(
+                            label: "Read reviews",
+                            icon: Icons.chat_bubble,
+                            color: Colors.black,
+                            iconColor: Colors.green,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CommunityReviews(
+                                    recipeId: _recipeData!['recipe_id'],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -277,4 +430,26 @@ class _RecipeDetailsState extends State<RecipeDetails> {
   Widget _buildVerticalDivider() {
     return Container(height: 30, width: 1, color: Colors.grey.shade300);
   }
+}
+
+Widget _buildActionButton({
+  required String label,
+  required IconData icon,
+  required Color color,
+  required Color iconColor,
+  required VoidCallback onTap,
+}) {
+  return SizedBox(
+    height: 55,
+    child: ElevatedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 20, color: iconColor),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+  );
 }

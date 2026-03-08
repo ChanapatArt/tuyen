@@ -1,19 +1,66 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:mobile_app/services/auth_service.dart';
+import 'package:intl/intl.dart';
 
 class Histories extends StatefulWidget {
   const Histories({super.key});
   @override
-  State<Histories> createState() => _FoodSchedulePage();
+  State<Histories> createState() => _HistoriesState();
 }
 
-class _FoodSchedulePage extends State<Histories> {
-  List<Map<String, String>> scheduleItems = [
-    {"meal": "Breakfast - 08:00", "menu": "Omelet"},
-    {"meal": "Lunch - 12:00", "menu": "Green Curry"},
-    {"meal": "Dinner - 12:00", "menu": "Green Curry"},
-  ];
-  final TextEditingController menuController = TextEditingController();
-  String selectedMeal = "Dinner - 17:00";
+class _HistoriesState extends State<Histories> {
+  List<dynamic> _allHistoryData = []; // เก็บข้อมูลดิบจาก API
+  List<dynamic> _filteredHistory = []; // เก็บข้อมูลที่กรองตามวันที่เลือก
+  bool _isLoading = true; // สถานะการโหลด
+  DateTime _selectedDate = DateTime.now(); // วันที่กำลังเลือกดู
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHistoryData(); // ดึงข้อมูลทันทีเมื่อเปิดหน้า
+  }
+
+  // ✅ ฟังก์ชันดึงข้อมูลจาก API
+  Future<void> _fetchHistoryData() async {
+    String? userId = await AuthService.getUserId();
+    if (userId == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('${AuthService.baseUrl}/history/$userId'),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['status'] == 'success') {
+          setState(() {
+            _allHistoryData = responseData['data'];
+            _filterByDate(_selectedDate); // กรองข้อมูลของวันนี้เริ่มต้น
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ ฟังก์ชันกรองข้อมูลตามวันที่
+  void _filterByDate(DateTime date) {
+    setState(() {
+      _selectedDate = date;
+      _filteredHistory = _allHistoryData.where((item) {
+        DateTime itemDate = DateTime.parse(item['history_date']);
+        return itemDate.year == date.year &&
+            itemDate.month == date.month &&
+            itemDate.day == date.day;
+      }).toList();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -42,75 +89,139 @@ class _FoodSchedulePage extends State<Histories> {
                 scrollDirection: Axis.horizontal,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minWidth:
-                        MediaQuery.of(context).size.width -
-                        40, // ลบ padding ซ้าย-ขวา (20+20)
+                    minWidth: MediaQuery.of(context).size.width - 40,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: List.generate(7, (index) {
-                      // ✅ คำนวณย้อนหลัง: วันนี้ลบด้วย index (0 คือวันนี้, 1 คือเมื่อวาน...)
+                      // ✅ คำนวณวันที่ย้อนหลังจากปัจจุบัน
                       DateTime dateToShow = DateTime.now().subtract(
                         Duration(days: index),
                       );
 
-                      // รายชื่อวันย่อ (ลำดับตาม weekday ของ Flutter: 1=Mon, 7=Sun)
-                      List<String> weekDays = [ "","M","T","W","Th","F","Sa","S",];
-
+                      List<String> weekDays = [
+                        "",
+                        "M",
+                        "T",
+                        "W",
+                        "Th",
+                        "F",
+                        "Sa",
+                        "S",
+                      ];
                       String dayLabel = weekDays[dateToShow.weekday];
                       String dateLabel = dateToShow.day.toString();
 
-                      // เช็กว่าเป็นวันปัจจุบันหรือไม่ (index 0 คือวันนี้)
-                      bool isSelected = index == 0;
+                      // ✅ เช็กสถานะการเลือกจาก _selectedDate จริงๆ
+                      bool isSelected =
+                          dateToShow.day == _selectedDate.day &&
+                          dateToShow.month == _selectedDate.month &&
+                          dateToShow.year == _selectedDate.year;
 
-                      return _buildDateItem(
-                        dayLabel,
-                        dateLabel,
-                        isSelected: isSelected,
+                      return GestureDetector(
+                        // ✅ เมื่อกดที่วันที่ ให้ทำการกรองข้อมูลใหม่
+                        onTap: () => _filterByDate(dateToShow),
+                        child: _buildDateItem(
+                          dayLabel,
+                          dateLabel,
+                          isSelected: isSelected,
+                        ),
                       );
                     }),
                   ),
                 ),
               ),
               const SizedBox(height: 30),
-
-              Column(
-                children: scheduleItems.map((item) {
-                  return Dismissible(
-                    key: UniqueKey(),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      margin: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 16,
+              _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF28B446),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade400,
-                        borderRadius: BorderRadius.circular(12),
+                    )
+                  : _filteredHistory.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 40),
+                        child: Text("No cooking history for this day."),
                       ),
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
+                    )
+                  : Column(
+                      children: _filteredHistory.map((item) {
+                        // 1. แปลงวันที่และเวลาจาก API
+                        DateTime dateTime = DateTime.parse(
+                          item['history_date'],
+                        );
+                        String formattedTime =
+                            "${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}";
 
-                    onDismissed: (direction) {
-                      setState(() {
-                        scheduleItems.remove(item); // ลบข้อมูลออกจาก List
-                      });
+                        return Dismissible(
+                          key: Key(
+                            item['history_id'].toString(),
+                          ), // ✅ ใช้ ID จริงจาก DB
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade400,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            child: const Icon(
+                              Icons.delete,
+                              color: Colors.white,
+                            ),
+                          ),
+                          onDismissed: (direction) async {
+                            // 1. เก็บ ID ไว้ก่อนที่จะลบออกจาก List ในเครื่อง
+                            final int historyIdToDelete = item['history_id'];
 
-                      // แจ้งเตือนสั้นๆ ด้านล่าง (Optional)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("${item['meal']} removed")),
-                      );
-                    },
-                    child: _buildScheduleCard(
-                      mealTime: item['meal']!,
-                      menuName: item['menu']!,
-                      calories: "350",
+                            // 2. อัปเดต UI ทันทีเพื่อให้ผู้ใช้รู้สึกว่าแอปเร็ว (Optimistic Update)
+                            setState(() {
+                              _allHistoryData.removeWhere(
+                                (h) => h['history_id'] == historyIdToDelete,
+                              );
+                              _filterByDate(_selectedDate);
+                            });
+                            try {
+                              final response = await http.delete(
+                                Uri.parse(
+                                  '${AuthService.baseUrl}/history/remove/$historyIdToDelete',
+                                ),
+                                headers: {'Content-Type': 'application/json'},
+                              );
+
+                              if (response.statusCode == 200) {
+                                final responseData = jsonDecode(response.body);
+                                if (responseData['status'] == 'success') {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          responseData['message'] ??
+                                              "Removed from history",
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                              } else {
+                                print("Failed to delete on server");
+                                _fetchHistoryData();
+                              }
+                            } catch (e) {
+                              print("Delete Error: $e");
+                            }
+                          },
+                          child: _buildScheduleCard(
+                            mealTime:
+                                "${item['history_type'].toUpperCase()} - $formattedTime",
+                            menuName: item['recipe_title'],
+                            calories: "350",
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
               const SizedBox(height: 24),
             ],
           ),
@@ -125,17 +236,30 @@ class _FoodSchedulePage extends State<Histories> {
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isSelected
+            ? const Color(0xFF28B446)
+            : Colors.white, // ✅ เปลี่ยนเป็นสีเขียวถ้าเลือก
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isSelected ? Colors.black : Colors.grey.shade200,
-          width: isSelected ? 2 : 1,
+          color: isSelected ? const Color(0xFF28B446) : Colors.grey.shade200,
         ),
       ),
       child: Column(
         children: [
-          Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text(date, style: const TextStyle(fontSize: 16)),
+          Text(
+            day,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isSelected ? Colors.white : Colors.black,
+            ),
+          ),
+          Text(
+            date,
+            style: TextStyle(
+              fontSize: 16,
+              color: isSelected ? Colors.white : Colors.black,
+            ),
+          ),
         ],
       ),
     );

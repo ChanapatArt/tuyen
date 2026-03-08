@@ -138,7 +138,7 @@ class _IngredientList extends State<IngredientList> {
                       return Dismissible(
                         key: ValueKey(
                           item['fridge_id'],
-                        ), /////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        ),
                         direction: DismissDirection.endToStart,
                         background: Container(
                           margin: const EdgeInsets.symmetric(

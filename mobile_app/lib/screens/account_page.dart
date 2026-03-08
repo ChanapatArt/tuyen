@@ -36,9 +36,9 @@ class _AccountPageState extends State<AccountPage> {
             // นำข้อมูลจาก API มาใส่ใน Controller
             _emailController.text = data['email'] ?? "";
             _nameController.text = data['display_name'] ?? "";
-            _targetController.text = (data['target_cal'] ?? 2000)
-                .toString();
+            _targetController.text = (data['target_cal'] ?? 2000).toString();
             // รหัสผ่านมักไม่ส่งกลับมาเพื่อความปลอดภัย หรือส่งมาเป็นค่าว่าง
+
             _passwordController.text = "********";
             _isLoading = false;
           });
@@ -169,38 +169,56 @@ class _AccountPageState extends State<AccountPage> {
               child: ElevatedButton(
                 onPressed: () async {
                   String? userId = await AuthService.getUserId();
+                  if (userId == null) return;
+
                   try {
+                    Map<String, dynamic> updateData = {
+                      "display_name": _nameController.text,
+                      "email": _emailController.text,
+                      "target_cal":
+                          int.tryParse(_targetController.text) ?? 2000,
+                    };
+                    // ตรวจสอบ: ถ้ามีการพิมพ์รหัสใหม่ (ไม่ใช่ค่าเดิมที่ดึงมา) ให้ส่งไปด้วย
+                    if (_passwordController.text != "********" &&
+                        _passwordController.text.isNotEmpty) {
+                      updateData["password"] = _passwordController.text;
+                    }
+
                     final response = await http.put(
-                      // หรือตามที่ API คุณกำหนด
-                      Uri.parse(
-                        '${AuthService.baseUrl}/user/$userId/edit',
-                      ),
+                      Uri.parse('${AuthService.baseUrl}/user/$userId/edit'),
                       headers: {'Content-Type': 'application/json'},
-                      body: jsonEncode({
-                        "display_name": _nameController.text,
-                        "email": _emailController.text,
-                        // "password":
-                        //     _passwordController.text, // ถ้ามีการกรอกใหม่
-                        "calorie_target":
-                            int.tryParse(_targetController.text) ?? 2000,
-                      }),
+                      body: jsonEncode(updateData),
                     );
 
-                    if (response.statusCode == 200) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Account Updated Successfully!"),
-                        ),
-                      );
+                    final responseData = jsonDecode(response.body);
+
+                    if (responseData['status'] == 'success') {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Account Updated Successfully!"),
+                          ),
+                        );
+                      }
+                      _fetchAccountData(); 
+                    } else {
+                      // จัดการ Error เช่น Email ซ้ำ
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              responseData['message'] ?? "Update failed",
+                            ),
+                          ),
+                        );
+                      }
                     }
-                  _fetchAccountData();
                   } catch (e) {
                     print("Update Error: $e");
                   }
-
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF28B446), // สีเขียวตามธีม
+                  backgroundColor: Colors.green,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),

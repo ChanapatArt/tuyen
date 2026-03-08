@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/services/auth_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -44,24 +47,18 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
               ),
               const SizedBox(height: 40),
-
-              // 2. ช่องกรอก Full Name
               _buildTextField(
                 controller: _nameController,
-                hintText: "Full Name",
+                hintText: "Name",
                 icon: Icons.person_outline,
               ),
               const SizedBox(height: 16),
-
-              // 3. ช่องกรอก User
               _buildTextField(
                 controller: _userController,
-                hintText: "User",
+                hintText: "Email",
                 icon: Icons.email_outlined,
               ),
               const SizedBox(height: 16),
-
-              // 4. ช่องกรอก Password
               _buildTextField(
                 controller: _passwordController,
                 hintText: "Password",
@@ -75,17 +72,78 @@ class _SignUpPageState extends State<SignUpPage> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Logic สำหรับสมัครสมาชิก
+                  onPressed: () async {
+                    // 1. ตรวจสอบว่ากรอกข้อมูลครบหรือไม่
+                    if (_nameController.text.isEmpty ||
+                        _userController.text.isEmpty ||
+                        _passwordController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please fill in all fields"),
+                        ),
+                      );
+                      return;
+                    }
+
+                    try {
+                      final response = await http.post(
+                        Uri.parse('${AuthService.baseUrl}/register'),
+                        headers: {'Content-Type': 'application/json'},
+                        body: jsonEncode({
+                          "email": _userController.text,
+                          "password": _passwordController.text,
+                          "display_name": _nameController.text,
+                        }),
+                      );
+                      final responseData = jsonDecode(response.body);
+                      if (responseData['status'] == 'success') {
+                        // 3. สมัครสำเร็จ ให้แจ้งเตือนและกลับไปหน้า Login
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "Registration Successful! Please sign in.",
+                              ),
+                            ),
+                          );
+                          Navigator.pop(context); // กลับไปหน้า Login
+                        }
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              // ดึงข้อความจากฟิลด์ "message" ที่ระบบส่งมา
+                              content: Text(
+                                responseData['message'] ??
+                                    'Registration failed',
+                              ),
+                              backgroundColor:
+                                  Colors.red.shade400,
+                            ),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      print("Registration Error: $e");
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Connection error. Please try again.",
+                            ),
+                          ),
+                        );
+                      }
+                    }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF12B347),
+                    backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
                     elevation: 5,
-                    shadowColor: const Color(0xFF12B347).withValues(alpha: .5),
+                    shadowColor: Colors.green.withValues(alpha: .5),
                   ),
                   child: const Text(
                     "Sign Up",
@@ -145,12 +203,14 @@ class _SignUpPageState extends State<SignUpPage> {
         decoration: InputDecoration(
           hintText: hintText,
           prefixIcon: Icon(icon, color: Colors.grey),
-          suffixIcon: isPassword 
-            ? IconButton(
-                icon: Icon(_isObscure ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _isObscure = !_isObscure),
-              )
-            : null,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    _isObscure ? Icons.visibility_off : Icons.visibility,
+                  ),
+                  onPressed: () => setState(() => _isObscure = !_isObscure),
+                )
+              : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: Colors.grey.shade200),
