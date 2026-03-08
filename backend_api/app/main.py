@@ -175,14 +175,17 @@ def register(user: UserRegisterSchema):
             return {"status": "error", "message": "มี Email นี้ในระบบแล้ว"}
         
         hashed_pw = pwd_context.hash(user.password)
-        # ตัด allergies และ diet_type ออกทั้งใน INSERT และ VALUES
+        
+        # เพิ่ม target_cal เข้าไปใน INSERT และกำหนดค่า 2000 ใน VALUES
         conn.execute(
             text("""
-                INSERT INTO users (email, password, display_name) 
-                VALUES (:e, :p, :d)
+                INSERT INTO users (email, password, display_name, target_cal) 
+                VALUES (:e, :p, :d, 2000)
             """), 
             {
-                "e": user.email, "p": hashed_pw, "d": user.display_name
+                "e": user.email, 
+                "p": hashed_pw, 
+                "d": user.display_name
             }
         )
         conn.commit()
@@ -342,7 +345,6 @@ def remove_history(history_id: int):
         return {"status": "success", "message": "ลบประวัติแล้ว!"}
 
 #4.12 history/user_id Get User History
-# 4.12 history/{user_id} Get User History
 @app.get("/history/{user_id}")
 def get_user_history(user_id: int):
     with engine.connect() as conn:
@@ -397,7 +399,7 @@ def remove_review(review_id: int):
         conn.commit()
         return {"status": "success", "message": "ลบรีวิวเรียบร้อยแล้ว!"}
     
-#4.15 
+#4.15 recipes/recipe_id/reviews Get Recipe Reviews
 @app.get("/recipes/{recipe_id}/reviews")
 def get_recipe_reviews(recipe_id: int):
     """
@@ -428,9 +430,7 @@ def get_recipe_reviews(recipe_id: int):
             
         return {"status": "success", "total": len(reviews_list), "data": reviews_list}
 
-# ==========================================
-# 🔍 API สำหรับหน้า Search Menu
-# ==========================================
+#4.16 recipes/search Search Recipes
 @app.get("/recipes/search")
 def search_recipes(q: str, limit: int = 20):
     
@@ -464,9 +464,7 @@ def search_recipes(q: str, limit: int = 20):
             
         return {"status": "success", "total": len(recipes_list), "data": recipes_list}
 
-# ==========================================
-# 🕒 API สำหรับหน้า Histories (ดูตามวันที่)
-# ==========================================
+#4.17 recipes/recipe_id/reviews Get Recipe Reviews
 @app.get("/history/{user_id}/by-date")
 def get_history_by_date(user_id: int, target_date: date):
     """
@@ -506,6 +504,7 @@ def get_history_by_date(user_id: int, target_date: date):
             "total": len(history_list), 
             "data": history_list
         }
+#4.18
 # ==========================================
 # 📖 API สำหรับหน้า รายละเอียดเมนู (Recipe Details)
 # ==========================================
