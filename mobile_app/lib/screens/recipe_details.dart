@@ -137,7 +137,7 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                         children: [
                           _buildStatItem(
                             "${_recipeData!['calories'] ?? 0}",
-                            "Kcal",
+                            "Cal.",
                           ), // ✅
                           _buildVerticalDivider(),
                           _buildStatItem(
@@ -147,7 +147,7 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                           _buildVerticalDivider(),
                           _buildStatItem(
                             "${_recipeData!['prep_time'] ?? 0}",
-                            "นาที",
+                            "minute",
                           ), // ✅
                         ],
                       ),

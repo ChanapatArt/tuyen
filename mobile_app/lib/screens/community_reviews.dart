@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:mobile_app/services/auth_service.dart';
 
 class CommunityReviews extends StatefulWidget {
-  final int recipeId; // ✅ รับ recipeId มาจากหน้า RecipeDetails
+  final int recipeId;
   const CommunityReviews({super.key, required this.recipeId});
 
   @override

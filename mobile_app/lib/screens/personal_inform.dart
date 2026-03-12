@@ -92,6 +92,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                   controller: _inputController,
                   decoration: InputDecoration(
                     hintText: isAllergy ? "Seafood" : "Vegan",
+                    hintStyle: TextStyle(color: Colors.grey),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -476,7 +477,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  "${isLoading ? '0' : consumed_calories }",
+                  "${isLoading ? '0' : consumed_calories}",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 40,
@@ -484,7 +485,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                   ),
                 ),
                 Text(
-                  "Kcal",
+                  "Calories",
                   style: TextStyle(
                     color: Colors.green,
                     fontSize: 20,
